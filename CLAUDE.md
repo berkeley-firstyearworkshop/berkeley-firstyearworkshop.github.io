@@ -14,7 +14,7 @@ The website for the Berkeley first-year PhD presentation series (Econ, ARE, and 
 | `blog/index.html` | Blog index: a front page for the latest 10 posts (lead, two with pictures, a list of four, a row of three), then square tiles |
 | `blog/submit.html` | Guidelines + submission form with live word counter and in-browser image resizing |
 | `blog/_template.html` | Post template (not published: Jekyll skips `_` files) |
-| `blog/posts/*.html`, `blog/images/` | Generated posts and their images; `default-banner.svg` is the no-image banner |
+| `blog/posts/*.html`, `blog/images/` | Generated posts and their images; `default-banner.svg` is the banner for a post without an image (the workshop's own, or one published with `--no-image`); `default-banner.png` is its copy for email |
 | `blog/posts.json` | Every post's public fields. Source for the index, home page, and the Sunday email |
 | `blog/blog.py` | `check`, `new`, `build`, `privacy`: see below |
 | `site.css`, `blog/blog.css`, `site.js` | Shared styles (tokens incl. dark mode, masthead, footer, buttons, forms, post cards); blog styles; shared JS (`API_URL`, `?demo` mode, `countWords`, `wordCounter`, `api`, `fmtDeadline`) |
@@ -59,7 +59,7 @@ Only what is published on the website may be committed.
 
 - **Posts go up as written.** The prior is that there are no typos. Fix only very obvious misspellings (e.g. "ecnomics" → "economics"), list each one (original → fix) for the user to approve, and never change wording, grammar, style, punctuation, math, names, technical terms, or anything that could be deliberate.
 - **Over 1,000 words** (math and links not counted): flag it and stop. Never trim.
-- **One image per post**, at the top, also used as its thumbnail. It must be the author's own photo or research figure, or licensed for reuse (Unsplash, Pexels, CC0/public domain, CC BY with credit). Not allowed: Google Images, news sites, figures from published journal articles, logos. If the source looks doubtful, flag it; publish with the default banner (`--no-image`) only if the user agrees.
+- **One image per post, required** (the form won't submit without one): at the top, also used as its thumbnail and in the Sunday email. It can be decorative, as long as it relates to the topic. It must be the author's own photo or research figure, or licensed for reuse (Unsplash, Pexels, CC0/public domain, CC BY with credit). Not allowed: Google Images, news sites, figures from published journal articles, logos. If the source looks doubtful, flag it; publish with the default banner (`--no-image`) only if the user agrees.
 - **Caption** is "Image: <credit>". For the author's own work, write "the author's own photo" or "the author's own figure".
 - **Alt text**: look at the image and write one sentence saying what it shows.
 - **Summary line** on the index is the post's first sentence without math, verbatim.
@@ -70,7 +70,7 @@ Only what is published on the website may be committed.
 - HTML-escape `& < >` everywhere, math included. A blank line starts a new paragraph (a submission with no blank lines gets one paragraph per line); single line breaks become `<br>`.
 - `$$…$$` → `\[…\]` (its own block if it's alone in a paragraph), `$…$` → `\(…\)` by pandoc's rule, `\$` → a plain `$`. Other dollar signs stay as text, so "$500" is safe. MathJax 3.2.2 reads only `\( \)` and `\[ \]`.
 - Links: authors write `As Acemoglu (2025) [link: www.xyz.com] shows`. A citation right before the tag ("Author (Year)", "Author and Author (Year)", "Author et al. (Year)", or "(Author, Year)") becomes the link; after anything else the tag becomes a small "[link]". Addresses without `https://` get it added; anything that isn't a web address (e.g. `javascript:`) stays as text. Bare `http(s)://` and `www.` addresses become links as they are.
-- Images: resized to 1600px wide. Figures (few colors, or `--kind figure`) are padded to 16:9 on white so the site's 16:9 crop never cuts axis labels, saved as PNG (JPEG q88 if over 500 KB). Photos are JPEG q80 and cropped to 16:9 by CSS on display.
+- Images: resized to 1600px wide. Figures (few colors, or `--kind figure`) are padded to 16:9 on white so the site's 16:9 crop never cuts axis labels, saved as PNG (JPEG q88 if over 500 KB). Photos are center-cropped to 16:9 (the same crop the site shows, and the Sunday email needs it because email can't crop) and saved as JPEG q80. `default-banner.png` is a copy of the SVG banner for email, which can't show SVG.
 
 ## Processing a submission
 
@@ -82,7 +82,7 @@ The files in `apps-script/` are copies. What runs is the Apps Script project bou
 
 - `Code.gs`: bookings; the abstract field and its deadline; the talk page's endpoints (look up, save abstract, move, cancel), each checked against a signed link built from the booking's `booking_id` (never the email), so links survive a move; request routing. Config: term dates, `ABSTRACT_WORDS`, `ABSTRACTS_FROM` (abstracts are optional for sessions before this date: no deadline, no reminder).
 - `Mailing.gs`: every email and trigger. Config: `REMINDER`, `ANNOUNCE`, `ABSTRACT_REMINDER` (derived from `ANNOUNCE`), `BLOG_DIGEST`, `ADMIN_EMAIL`. Run `remindNextSessionAbstracts` by hand to chase the next session's missing abstracts when the automatic reminder has already passed (after the deadline, it asks for them before the announcement instead).
-- `Blog.gs`: blog submissions. `BLOG_SHEET_ID` is set in the live project only; keep it `''` in the repo copy.
+- `Blog.gs`: blog submissions (an image is required). Each one emails the organizers the submission and the author a thank-you with a copy of what they sent (`sendBlogThanks_` in `Mailing.gs`). `BLOG_SHEET_ID` is set in the live project only; keep it `''` in the repo copy.
 
 Abstract timing for a Wednesday 3pm talk:
 
@@ -91,6 +91,6 @@ Abstract timing for a Wednesday 3pm talk:
 | Monday 9am | 9 | Reminder to presenters without an abstract, cc `ADMIN_EMAIL` |
 | Wednesday 10am | 7 | Abstract deadline (24h before the announcement); "Skip for now" disappears after this |
 | Thursday 10am | 6 | Weekly announcement to the mailing list, abstracts included |
-| Sunday 7pm | weekly | "New on the blog" email, skipped when there are no new posts |
+| Sunday 7pm | weekly | "New on the blog" email, skipped when there are no new posts. Every post gets the same-size card, in a random order for each subscriber, so none is featured |
 
 Apps Script can't run locally. The `.gs` files are plain JavaScript, so their syntax and pure helpers (`countWords_`, `newPosts_`, date math with a stubbed `Utilities`) can be checked by loading them in headless Chrome. `testEmails` (run in the Apps Script editor) sends one of every email to the account running it.

@@ -56,6 +56,8 @@ function testEmails() {
   const talk = { id: sample.id, slot_id: slotId_(s.date, time), name: sample.name, email: me, title: sample.title, department: 'Econ', type: 'paper', abstract: '' };
   sendMoveNotice_(talk, slotId_(shiftDate_(s.date, 7), time), me);
   sendCancelNotice_(talk, me);
+  sendBlogThanks_({ name: sample.name, email: me, hideEmail: false, title: 'A sample blog post', credit: 'My own photo',
+    text: 'The first paragraph of the post.\n\nA second paragraph, with some math: $\\beta R < 1$.' }, 14, 'sample-photo.jpg');
   trySend_(() => blogDigest_(me));
 }
 
@@ -228,6 +230,40 @@ ${SITE_URL}`;
   });
 }
 
+// ----- Thank-you to a blog author (called from Blog.gs), with a copy of what they sent -----
+function sendBlogThanks_(c, words, imageName) {
+  const next = "We'll check it against the guidelines and then put it on the blog. Once it's up, it also goes out in the Sunday email to the mailing list.";
+  const changeNote = 'To change anything before it goes up, reply to this email.';
+  const rows = [['Title', c.title], ['Words', String(words)], ['Image', imageName], ['Image credit', c.credit], ['Your email', c.hideEmail ? 'Hidden on the post' : 'Shown on the post']];
+  const text =
+`Hi ${firstName_(c.name)},
+
+Thanks for writing a blog post for the ${SEMINAR_NAME}. We've received it.
+
+${next}
+
+${rows.map(([k, v]) => `${k}: ${v}`).join('\n')}
+
+${changeNote}
+
+Your post as you sent it:
+
+${c.title}
+
+${c.text}
+
+${SEMINAR_NAME}
+${SITE_URL}blog/`;
+  const html = shell_('Thanks for your blog post', c.title, `
+    ${p_(`Hi ${h_(firstName_(c.name))},`)}
+    ${p_(`Thanks for writing a blog post for the ${h_(SEMINAR_NAME)}. We've received it.`)}
+    ${p_(next)}
+    ${details_(rows)}
+    ${p_(changeNote)}
+    <div style="margin:16px 0;padding:12px 16px;background:#f1f4f7;border-radius:4px"><div style="color:#5a6773;font-size:13px;margin-bottom:4px">Your post as you sent it</div><div style="font-family:Georgia,serif;font-weight:600;margin-bottom:8px">${h_(c.title)}</div><div style="white-space:pre-wrap">${h_(c.text)}</div></div>`);
+  send_({ to: c.email, subject: `Thanks for your blog post: ${c.title}`, body: text, htmlBody: html });
+}
+
 // ----- Abstract reminders: presenters still without one, copied to the organizers -----
 function abstractReminders_() {
   const s = sessionInDays_(ABSTRACT_REMINDER.daysBefore);
@@ -398,22 +434,69 @@ function blogDigest_(testTo) {
   if (!testTo) props.setProperty('blog_announced', JSON.stringify(announced.concat(fresh.map(p => p.slug)).slice(-500)));
 
   const subject = fresh.length === 1 ? `New on the ${SEMINAR_NAME} blog: ${fresh[0].title}` : `This week on the ${SEMINAR_NAME} blog`;
-  const postUrl = p => `${SITE_URL}blog/posts/${p.slug}.html`;
-  const writeUrl = `${SITE_URL}blog/submit.html`;
+  // Each subscriber gets the posts in their own random order, so no post is always on top.
   recipients.forEach(email => {
     const unsub = unsubscribeLink_(email);
-    const text = `New on the blog\n\n` + fresh.map(p =>
-      `${p.title}\n${p.author}, ${fmtLong_(p.date)}\n${p.standfirst ? p.standfirst + '\n' : ''}${postUrl(p)}`).join('\n\n') +
-      `\n\nWrite a blog post: ${writeUrl}\n\nUnsubscribe: ${unsub}`;
-    const html = shell_('New on the blog', 'Short posts by first-year PhD students in Econ, ARE, and Haas.', fresh.map(p => `
-      <div style="margin:20px 0;padding-top:16px;border-top:1px solid #e3e8ee">
-        ${p.image ? `<a href="${postUrl(p)}"><img src="${SITE_URL}blog/images/${encodeURIComponent(p.image)}" alt="" width="520" style="display:block;width:100%;max-width:520px;height:auto;border-radius:4px;margin:0 0 12px"></a>` : ''}
-        <a href="${postUrl(p)}" style="font-family:Georgia,serif;font-size:20px;font-weight:600;color:#003262;text-decoration:none">${h_(p.title)}</a>
-        <div style="color:#5a6773;margin:4px 0 6px">${h_(p.author)}, ${h_(fmtLong_(p.date))}</div>
-        ${p.standfirst ? `<div>${h_(p.standfirst)}</div>` : ''}
-      </div>`).join('') + p_(`<a href="${writeUrl}" style="color:#003262">Write a blog post</a>: up to 1,000 words on an idea, a paper you liked, or something you've learned.`), unsub);
-    send_({ to: email, subject: subject, body: text, htmlBody: html });
+    const order = shuffle_(fresh);
+    send_({ to: email, subject: subject, body: digestText_(order, unsub), htmlBody: digestHtml_(order, unsub) });
   });
+}
+
+const shuffle_ = a => {
+  const b = a.slice();
+  for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; }
+  return b;
+};
+
+const postUrl_ = p => `${SITE_URL}blog/posts/${p.slug}.html`;
+const WRITE_URL = `${SITE_URL}blog/submit.html`;
+const WRITE_PITCH = "Up to 1,000 words on research you're working on, a paper you liked, or something useful you've learned.";
+
+function digestText_(posts, unsub) {
+  return `New on the ${SEMINAR_NAME} blog\n\n` + posts.map(p =>
+    `${p.title}\n${p.author}, ${fmtLong_(p.date)}\n${p.standfirst ? p.standfirst + '\n' : ''}${postUrl_(p)}`).join('\n\n') +
+    `\n\nWrite a blog post. ${WRITE_PITCH}\n${WRITE_URL}\n\nUnsubscribe: ${unsub}`;
+}
+
+// A newsletter layout of its own rather than shell_. Every post gets the same card, so none is featured over
+// another. Tables and inline styles because email clients ignore most CSS. Images are PNG or JPEG (Gmail won't
+// show SVG) and already 16:9, since email can't crop; blog.py makes them that way.
+function digestHtml_(posts, unsub) {
+  const serif = "Georgia,'Times New Roman',serif";
+  const card = p => `
+      <a href="${postUrl_(p)}"><img src="${SITE_URL}blog/images/${encodeURIComponent(p.image || 'default-banner.png')}" alt="${h_(p.image_alt || '')}" width="544" style="display:block;width:100%;max-width:544px;height:auto;border:0;border-radius:4px"></a>
+      <a href="${postUrl_(p)}" style="display:block;font-family:${serif};font-size:24px;line-height:1.2;font-weight:600;color:#003262;text-decoration:none;margin:18px 0 6px">${h_(p.title)}</a>
+      <div style="font-size:13px;color:#5a6773">${h_(p.author)} &middot; ${h_(fmtLong_(p.date))}</div>
+      ${p.standfirst ? `<p style="font-size:16px;margin:12px 0 0">${h_(p.standfirst)}</p>` : ''}
+      ${button_(postUrl_(p), 'Read the post')}`;
+  const preview = posts.length === 1 ? posts[0].standfirst || posts[0].title : posts.map(p => p.title).join(' · ');
+  return `
+<div style="display:none;max-height:0;overflow:hidden">${h_(preview)}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f4f7">
+<tr><td align="center" style="padding:24px 12px">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:6px;font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#15212c;line-height:1.5;text-align:left">
+    <tr><td style="background:#003262;border-bottom:4px solid #fdb515;border-radius:6px 6px 0 0;padding:22px 28px">
+      <a href="${SITE_URL}blog/" style="font-family:${serif};font-size:22px;font-weight:600;color:#ffffff;text-decoration:none">${SEMINAR_NAME}</a>
+      <div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#b7c8d9;margin-top:4px">The blog &middot; ${h_(fmtLong_(today_()))}</div>
+    </td></tr>
+    <tr><td style="padding:28px 28px 4px">
+      <div style="font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#0a4178;margin:0 0 12px">New on the blog</div>
+      ${posts.map(card).join('<div style="border-top:1px solid #d3dae2;margin:28px 0"></div>')}
+    </td></tr>
+    <tr><td style="padding:12px 28px 28px">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f4f7;border-radius:6px"><tr><td style="padding:20px 22px">
+        <div style="font-family:${serif};font-size:19px;font-weight:600;color:#003262">Write a blog post</div>
+        <p style="font-size:15px;margin:6px 0 0">${WRITE_PITCH} Read by first-year PhD students across Econ, ARE, and Haas.</p>
+        ${button_(WRITE_URL, 'Write a blog post', '14px 0 0')}
+      </td></tr></table>
+    </td></tr>
+  </table>
+  <p style="max-width:600px;font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;font-size:12px;line-height:1.5;color:#8a96a3;margin:16px auto 0;text-align:center">
+    You're getting this because you're on the ${SEMINAR_NAME} mailing list.<br>
+    <a href="${SITE_URL}" style="color:#8a96a3">${h_(host_())}</a> &nbsp;|&nbsp; <a href="${unsub}" style="color:#8a96a3">Unsubscribe</a>
+  </p>
+</td></tr>
+</table>`;
 }
 
 // Posts not sent yet, skipping anything older than two weeks so the first run never sends the whole archive.
@@ -551,7 +634,7 @@ function shell_(heading, sub, inner, unsub) {
 </div>`;
 }
 const p_ = html => `<p style="margin:16px 0">${html}</p>`;
-const button_ = (href, label) => `<p style="margin:20px 0"><a href="${h_(href)}" style="display:inline-block;background:#003262;color:#ffffff;font-weight:600;text-decoration:none;padding:12px 18px;border-radius:4px">${h_(label)}</a></p>`;
+const button_ = (href, label, margin = '20px 0') => `<p style="margin:${margin}"><a href="${h_(href)}" style="display:inline-block;background:#003262;color:#ffffff;font-weight:600;text-decoration:none;padding:12px 18px;border-radius:4px">${h_(label)}</a></p>`;
 const abstractHtml_ = abstract => `<div style="margin:16px 0;padding:12px 16px;background:#f1f4f7;border-radius:4px"><div style="color:#5a6773;font-size:13px;margin-bottom:4px">Abstract</div>${h_(abstract)}</div>`;
 
 function details_(rows) {

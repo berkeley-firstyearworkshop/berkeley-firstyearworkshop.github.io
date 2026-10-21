@@ -30,28 +30,25 @@ function submitPost_(d) {
   if (!c.title) return { ok: false, error: 'Add a title.' };
   if (!c.text) return { ok: false, error: 'Add the text of your post.' };
   if (words > BLOG_WORDS) return { ok: false, error: 'Your post is ' + words + ' words. Shorten it to ' + BLOG_WORDS + ' or fewer.' };
+  if (!img) return { ok: false, error: 'Add an image for the top of your post.' };
+  if (!BLOG_IMAGE_TYPES[img.type]) return { ok: false, error: 'Use a JPG, PNG, or WebP image.' };
+  if (img.data.length > BLOG_MAX_IMAGE_CHARS) return { ok: false, error: 'That image is too large. Choose a smaller one.' };
+  if (!c.credit) return { ok: false, error: 'Add where the image comes from.' };
   if (d.agree !== true) return { ok: false, error: "Check the box to confirm you've read the guidelines and rules." };
-  if (img) {
-    if (!BLOG_IMAGE_TYPES[img.type]) return { ok: false, error: 'Use a JPG, PNG, or WebP image.' };
-    if (img.data.length > BLOG_MAX_IMAGE_CHARS) return { ok: false, error: 'That image is too large. Choose a smaller one.' };
-    if (!c.credit) return { ok: false, error: 'Add where the image comes from.' };
-  }
 
-  let blob = null;
-  if (img) {
-    const base = img.name.replace(/\.[^.]*$/, '').replace(/[^\w-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'image';
-    try {
-      blob = Utilities.newBlob(Utilities.base64Decode(img.data), img.type, base + '.' + BLOG_IMAGE_TYPES[img.type]);
-    } catch (err) {
-      return { ok: false, error: "The image couldn't be read. Try a JPG or PNG." };
-    }
+  let blob;
+  const base = img.name.replace(/\.[^.]*$/, '').replace(/[^\w-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'image';
+  try {
+    blob = Utilities.newBlob(Utilities.base64Decode(img.data), img.type, base + '.' + BLOG_IMAGE_TYPES[img.type]);
+  } catch (err) {
+    return { ok: false, error: "The image couldn't be read. Try a JPG or PNG." };
   }
 
   let sheetUrl = '';
   if (BLOG_SHEET_ID) {
     const sheet = getBlogSheet_();
     sheet.appendRow([new Date(), safe_(c.name), c.email, c.hideEmail ? 'yes' : 'no', safe_(c.program), safe_(c.title), words,
-      blob ? blob.getName() : '', safe_(c.credit), 'received', '']);
+      blob.getName(), safe_(c.credit), 'received', '']);
     sheetUrl = sheet.getParent().getUrl();
   } else {
     console.warn('BLOG_SHEET_ID is empty: this submission was emailed but not recorded in a Sheet.');
@@ -65,7 +62,7 @@ function submitPost_(d) {
     'Hide email: ' + (c.hideEmail ? 'yes' : 'no'),
     'Program: ' + c.program,
     'Title: ' + c.title,
-    'Image: ' + (blob ? blob.getName() + ' (attached)' : 'none'),
+    'Image: ' + blob.getName() + ' (attached)',
     'Image credit: ' + c.credit,
     'Word count: ' + words,
     '=== POST TEXT ===',
@@ -80,9 +77,10 @@ function submitPost_(d) {
     replyTo: c.email,
     subject: 'Blog submission: ' + c.title + ' (' + c.name + ')',
     body: body,
+    attachments: [blob],
   };
-  if (blob) msg.attachments = [blob];
   send_(msg); // Mailing.gs
+  trySend_(() => sendBlogThanks_(c, words, blob.getName())); // Mailing.gs
   return { ok: true };
 }
 

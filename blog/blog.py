@@ -211,7 +211,8 @@ def math_report(text):
 
 def save_image(data, slug, kind='auto'):
     """Resize to 1600px wide and strip all metadata. Figures are padded to 16:9 on white so the
-    16:9 crop on the site never cuts axis labels; photos are left for that crop."""
+    16:9 crop on the site never cuts axis labels; photos are cropped to 16:9 here, the same center
+    crop the site's CSS makes, because the Sunday email can't crop."""
     from PIL import Image, ImageOps
     im = Image.open(io.BytesIO(data))
     im = ImageOps.exif_transpose(im)
@@ -226,13 +227,16 @@ def save_image(data, slug, kind='auto'):
         small = im.copy()
         small.thumbnail((400, 400))
         kind = 'figure' if small.getcolors(maxcolors=4096) is not None else 'photo'
-    if kind == 'figure':
-        w, h = im.size
-        if abs(w / h - 16 / 9) > 0.01:
+    w, h = im.size
+    if abs(w / h - 16 / 9) > 0.01:
+        if kind == 'figure':
             W, H = (w, round(w * 9 / 16)) if w / h > 16 / 9 else (round(h * 16 / 9), h)
             canvas = Image.new('RGB', (W, H), 'white')
             canvas.paste(im, ((W - w) // 2, (H - h) // 2))
             im = canvas
+        else:
+            W, H = (round(h * 16 / 9), h) if w / h > 16 / 9 else (w, round(w * 9 / 16))
+            im = im.crop(((w - W) // 2, (h - H) // 2, (w - W) // 2 + W, (h - H) // 2 + H))
     if im.width > IMAGE_WIDTH:
         im = im.resize((IMAGE_WIDTH, round(im.height * IMAGE_WIDTH / im.width)), Image.LANCZOS)
     im.info = {}
@@ -433,7 +437,7 @@ def cmd_check(a):
         print(f'            saved for viewing as {copy}')
         print(f'Credit:     {fields.get("credit") or "MISSING"}')
     else:
-        print('Image:      none (default banner)' + (f' -- the email names "{fields["image"]}" but it was not found' if fields.get('image', 'none').lower() != 'none' else ''))
+        print('Image:      none -- the form requires one, so flag this' + (f' -- the email names "{fields["image"]}" but it was not found' if fields.get('image', 'none').lower() != 'none' else ''))
     print(f'Summary:    {first_sentence(text)}')
     spans, kept = math_report(text)
     print(f'\nMath ({len(spans)}):')

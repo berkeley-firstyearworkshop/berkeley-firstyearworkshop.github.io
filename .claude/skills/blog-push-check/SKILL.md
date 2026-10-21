@@ -25,7 +25,7 @@ Read `CLAUDE.md` first (Privacy, Blog content rules, Formatting).
 3. **Faithful text.** Strip the tags from the post body and compare it with the submission's `=== POST TEXT ===`. The only allowed differences: math turned into `\( \)` / `\[ \]`, links turned into `<a>` (citation or `[link]`), HTML escaping, `\$` shown as `$`, paragraph and line breaks, and the approved changes you were given. Any other change to the wording, title, or author name is a BLOCK.
 4. **Rules.**
    - `python3 blog/blog.py check <submission>` reports 1,000 words or fewer.
-   - If there is an image: it has a credit, the caption reads `Image: …`, the alt text describes the picture, and the source fits the rules (own photo or figure, Unsplash, Pexels, CC0/public domain, CC BY with credit; not Google Images, news sites, figures from published journal articles, or logos). If the source can't be judged from the credit, BLOCK.
+   - The image: there is one, unless the agent that launched you says the user approved `--no-image`. It has a credit, the caption reads `Image: …`, the alt text describes the picture, and the source fits the rules (own photo or figure, Unsplash, Pexels, CC0/public domain, CC BY with credit; not Google Images, news sites, figures from published journal articles, or logos). If the source can't be judged from the credit, BLOCK.
    - No university logos or seals and no organizer names were added.
    - The page ends with the author's email (unless hidden), the "Write a blog post" box, and the disclaimer.
 5. **Page details.** The `<title>` is `<post title> | UC Berkeley Economics First-Year Workshop`. Date and author are right. Every link is `http(s)://`; nothing like `javascript:`.
