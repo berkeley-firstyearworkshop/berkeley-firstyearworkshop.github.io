@@ -42,9 +42,10 @@
 .post-figure figcaption { margin-top: .6rem; font-size: .85rem; color: var(--muted); }
 .post-body, .post-end { max-width: 43rem; margin: 0 auto; padding: 0 1.5rem; }
 .post-body { font: 400 1.1875rem/1.65 var(--serif); }
-.post-body p { margin: 0 0 1.3rem; }
+.post-body p { margin: 0 0 1.3rem; text-align: justify; -webkit-hyphens: auto; hyphens: auto; text-wrap: pretty; }
 .post-body .eq { margin: 1.5rem 0; }
 .post-body a { overflow-wrap: anywhere; }
+.post-body a.url { -webkit-hyphens: manual; hyphens: manual; word-break: break-all; }
 .post-body mjx-container[display="true"] { overflow-x: auto; overflow-y: hidden; padding: .2rem 0; }
 .contact { margin: 2.75rem 0 0; padding-top: 1.25rem; border-top: 1px solid var(--line); color: var(--muted); font-size: .95rem; }
 .contact a { overflow-wrap: anywhere; }
@@ -59,7 +60,7 @@
   .post-figure { padding: 0; margin: 1.75rem 0; }
   .post-figure img { border-radius: 0; border-left: 0; border-right: 0; }
   .post-figure figcaption { padding: 0 1.5rem; }
-  .post-body { font-size: 1.125rem; }
+  .post-body { font-size: 1.0625rem; }
   .write-cta { padding: 1.5rem 1.25rem; }
   .write-cta .btn { width: 100%; }
 }

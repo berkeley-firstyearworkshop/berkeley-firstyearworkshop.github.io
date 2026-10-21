@@ -147,7 +147,9 @@ def prose_html(s):
         if not url:
             continue
         out.append(plain(s[pos:m.start()]))
-        out.append(f'<a href="{esc(url)}">{label}</a>')
+        # Bare addresses get class "url" so the justified text breaks them anywhere rather than hyphenating them.
+        cls = ' class="url"' if m.group('bare') else ''
+        out.append(f'<a{cls} href="{esc(url)}">{label}</a>')
         pos = end
     out.append(plain(s[pos:]))
     return ''.join(out)

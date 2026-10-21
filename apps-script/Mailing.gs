@@ -416,9 +416,7 @@ Unsubscribe: ${unsub}`;
 // Reads the live site's blog/posts.json and remembers which posts it has sent, so a post published
 // just after a send goes out the following week.
 function blogDigest_(testTo) {
-  const res = UrlFetchApp.fetch(SITE_URL + 'blog/posts.json', { muteHttpExceptions: true });
-  if (res.getResponseCode() !== 200) throw new Error('Could not read blog/posts.json: HTTP ' + res.getResponseCode());
-  const posts = JSON.parse(res.getContentText());
+  const posts = livePosts_();
   const props = PropertiesService.getScriptProperties();
   const announced = JSON.parse(props.getProperty('blog_announced') || '[]');
   const fresh = testTo ? posts.slice(0, 3) : newPosts_(posts, announced, today_());
@@ -442,6 +440,12 @@ function blogDigest_(testTo) {
   });
 }
 
+function livePosts_() {
+  const res = UrlFetchApp.fetch(SITE_URL + 'blog/posts.json', { muteHttpExceptions: true });
+  if (res.getResponseCode() !== 200) throw new Error('Could not read blog/posts.json: HTTP ' + res.getResponseCode());
+  return JSON.parse(res.getContentText());
+}
+
 const shuffle_ = a => {
   const b = a.slice();
   for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; }
@@ -453,39 +457,47 @@ const WRITE_URL = `${SITE_URL}blog/submit.html`;
 const WRITE_PITCH = "Up to 1,000 words on research you're working on, a paper you liked, or something useful you've learned.";
 
 function digestText_(posts, unsub) {
-  return `New on the ${SEMINAR_NAME} blog\n\n` + posts.map(p =>
-    `${p.title}\n${p.author}, ${fmtLong_(p.date)}\n${p.standfirst ? p.standfirst + '\n' : ''}${postUrl_(p)}`).join('\n\n') +
+  return `New on the ${SEMINAR_NAME} blog\n\n` + postsText_(posts) +
     `\n\nWrite a blog post. ${WRITE_PITCH}\n${WRITE_URL}\n\nUnsubscribe: ${unsub}`;
 }
+const postsText_ = posts => posts.map(p =>
+  `${p.title}\n${p.author}, ${fmtLong_(p.date)}\n${p.standfirst ? p.standfirst + '\n' : ''}${postUrl_(p)}`).join('\n\n');
 
-// A newsletter layout of its own rather than shell_. Every post gets the same card, so none is featured over
-// another. Tables and inline styles because email clients ignore most CSS. Images are PNG or JPEG (Gmail won't
-// show SVG) and already 16:9, since email can't crop; blog.py makes them that way.
 function digestHtml_(posts, unsub) {
-  const serif = "Georgia,'Times New Roman',serif";
-  const card = p => `
+  const preview = posts.length === 1 ? posts[0].standfirst || posts[0].title : posts.map(p => p.title).join(' · ');
+  return newsletter_(kicker_('New on the blog') + postCards_(posts), preview, unsub);
+}
+
+const SERIF = "Georgia,'Times New Roman',serif";
+const kicker_ = text => `<div style="font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#0a4178;margin:0 0 12px">${h_(text)}</div>`;
+const divider_ = () => '<div style="border-top:1px solid #d3dae2;margin:28px 0"></div>';
+
+// Every post gets the same card, so none is featured over another. Images are PNG or JPEG (Gmail won't show
+// SVG) and already 16:9, since email can't crop; blog.py makes them that way.
+const postCards_ = posts => posts.map(p => `
       <a href="${postUrl_(p)}"><img src="${SITE_URL}blog/images/${encodeURIComponent(p.image || 'default-banner.png')}" alt="${h_(p.image_alt || '')}" width="544" style="display:block;width:100%;max-width:544px;height:auto;border:0;border-radius:4px"></a>
-      <a href="${postUrl_(p)}" style="display:block;font-family:${serif};font-size:24px;line-height:1.2;font-weight:600;color:#003262;text-decoration:none;margin:18px 0 6px">${h_(p.title)}</a>
+      <a href="${postUrl_(p)}" style="display:block;font-family:${SERIF};font-size:24px;line-height:1.2;font-weight:600;color:#003262;text-decoration:none;margin:18px 0 6px">${h_(p.title)}</a>
       <div style="font-size:13px;color:#5a6773">${h_(p.author)} &middot; ${h_(fmtLong_(p.date))}</div>
       ${p.standfirst ? `<p style="font-size:16px;margin:12px 0 0">${h_(p.standfirst)}</p>` : ''}
-      ${button_(postUrl_(p), 'Read the post')}`;
-  const preview = posts.length === 1 ? posts[0].standfirst || posts[0].title : posts.map(p => p.title).join(' · ');
+      ${button_(postUrl_(p), 'Read the post')}`).join(divider_());
+
+// The blog emails' own newsletter layout rather than shell_: masthead, `inner`, a "Write a blog post" box, footer.
+// Tables and inline styles because email clients ignore most CSS.
+function newsletter_(inner, preview, unsub) {
   return `
 <div style="display:none;max-height:0;overflow:hidden">${h_(preview)}</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f4f7">
 <tr><td align="center" style="padding:24px 12px">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:6px;font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#15212c;line-height:1.5;text-align:left">
     <tr><td style="background:#003262;border-bottom:4px solid #fdb515;border-radius:6px 6px 0 0;padding:22px 28px">
-      <a href="${SITE_URL}blog/" style="font-family:${serif};font-size:22px;font-weight:600;color:#ffffff;text-decoration:none">${SEMINAR_NAME}</a>
+      <a href="${SITE_URL}blog/" style="font-family:${SERIF};font-size:22px;font-weight:600;color:#ffffff;text-decoration:none">${SEMINAR_NAME}</a>
       <div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#b7c8d9;margin-top:4px">The blog &middot; ${h_(fmtLong_(today_()))}</div>
     </td></tr>
-    <tr><td style="padding:28px 28px 4px">
-      <div style="font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#0a4178;margin:0 0 12px">New on the blog</div>
-      ${posts.map(card).join('<div style="border-top:1px solid #d3dae2;margin:28px 0"></div>')}
+    <tr><td style="padding:28px 28px 4px">${inner}
     </td></tr>
     <tr><td style="padding:12px 28px 28px">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f4f7;border-radius:6px"><tr><td style="padding:20px 22px">
-        <div style="font-family:${serif};font-size:19px;font-weight:600;color:#003262">Write a blog post</div>
+        <div style="font-family:${SERIF};font-size:19px;font-weight:600;color:#003262">Write a blog post</div>
         <p style="font-size:15px;margin:6px 0 0">${WRITE_PITCH} Read by first-year PhD students across Econ, ARE, and Haas.</p>
         ${button_(WRITE_URL, 'Write a blog post', '14px 0 0')}
       </td></tr></table>
