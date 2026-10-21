@@ -1,0 +1,5 @@
+# Raw blog submissions (emails, text, original images) never go in git: the repo is public. See CLAUDE.md.
+submissions/
+__pycache__/
+# Local to-do list
+TODO.md

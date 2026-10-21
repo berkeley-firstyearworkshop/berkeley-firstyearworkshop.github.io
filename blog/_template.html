@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{title}} | UC Berkeley Economics First-Year Workshop</title>
+<meta name="description" content="{{standfirst}}">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../site.css">
+<link rel="stylesheet" href="../blog.css">
+<script>
+// Only \( \) and \[ \] are math, so a dollar sign in the text is never mistaken for math.
+window.MathJax = { tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] } };
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-chtml.js"></script>
+</head>
+<body>
+
+<!-- site-header -->
+<!-- /site-header -->
+
+<main class="post">
+  <article>
+    <header class="post-head">
+      <a class="back" href="../"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3 5 8l5 5"/></svg>All posts</a>
+      <h1>{{title}}</h1>
+      <p class="byline">By <span class="author">{{author}}</span><span class="sep" aria-hidden="true">·</span><time datetime="{{date}}">{{date_long}}</time></p>
+    </header>
+
+    <figure class="post-figure">
+      <img src="{{image_src}}" alt="{{image_alt}}" width="1600" height="900">
+      {{caption}}
+    </figure>
+
+    <div class="post-body">
+{{body}}
+    </div>
+
+    <div class="post-end">
+      {{contact}}
+      <aside class="write-cta" aria-labelledby="cta-h">
+        <div>
+          <h2 id="cta-h">Write a blog post</h2>
+          <p>Share an idea you're working on, a paper you liked, or something you've learned this year.</p>
+        </div>
+        <a class="btn btn-primary btn-write" href="../submit.html"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16.5 15.5 5 19 8.5 7.5 20H4z"/><path d="m13 7.5 3.5 3.5"/></svg>Write a post</a>
+      </aside>
+      <p class="disclaimer">Posts are written by their authors and reflect their own views. The workshop doesn't edit or endorse them and isn't responsible for their content. To report a problem with a post, email <a href="mailto:berkeleyfirstyearworkshop@gmail.com">berkeleyfirstyearworkshop@gmail.com</a>.</p>
+    </div>
+  </article>
+</main>
+
+<!-- site-footer -->
+<!-- /site-footer -->
+
+</body>
+</html>

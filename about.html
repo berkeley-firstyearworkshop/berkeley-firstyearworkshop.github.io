@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>About | UC Berkeley Economics First-Year Workshop</title>
+<meta name="description" content="How the First-Year Workshop works, and answers to common questions.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="site.css">
+<style>
+  .section { padding: 3.5rem 0; }
+  .section + .section { border-top: 1px solid var(--line); }
+  .split { display: grid; grid-template-columns: 1fr 2.2fr; gap: 3rem; }
+  .points { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2.25rem; }
+  .points h3 { font-size: 1.05rem; margin: 0 0 .4rem; }
+  .points p { margin: 0; color: var(--muted); }
+  details { border-top: 1px solid var(--line); padding: 1.1rem 0; }
+  details:last-child { border-bottom: 1px solid var(--line); }
+  summary { font-weight: 600; cursor: pointer; list-style: none; display: flex; justify-content: space-between; gap: 1rem; }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: "+"; color: var(--muted); font-weight: 400; font-size: 1.3rem; line-height: 1; }
+  details[open] summary::after { content: "\2212"; }
+  details p { margin: .6rem 0 0; color: var(--muted); max-width: 40rem; }
+  @media (max-width: 820px) {
+    .section { padding: 2.75rem 0; }
+    .split, .points { grid-template-columns: 1fr; gap: 1.5rem; }
+  }
+</style>
+</head>
+<body>
+
+<!-- site-header -->
+<header class="masthead">
+  <div class="wrap masthead-row">
+    <a class="brand" href="./">First-Year Workshop<span class="brand-sub">Econ, ARE, and Haas</span></a>
+    <nav class="nav" aria-label="Main">
+      <ul>
+        <li><a href="./#schedule">Schedule</a></li>
+        <li><a href="./blog/">Blog</a></li>
+        <li><a href="./about.html" aria-current="page">About</a></li>
+      </ul>
+    </nav>
+    <a class="btn btn-gold masthead-cta" href="./#schedule"><span class="long">Sign up to present</span><span class="short">Sign up</span></a>
+  </div>
+</header>
+<!-- /site-header -->
+
+<main>
+  <div class="wrap page-head">
+    <div class="page-head-inner">
+      <div>
+        <h1>About</h1>
+        <p class="lede">An informal weekly session where first-year PhD students in Econ, ARE, and Haas try out papers and early-stage ideas on each other. Wednesdays, 3-4pm, Room C330, Cheit Hall, Haas.</p>
+      </div>
+    </div>
+  </div>
+
+  <section class="section" id="how">
+    <div class="wrap split">
+      <h2 class="title">How it works</h2>
+      <div class="points">
+        <div>
+          <h3>Fifteen minutes each</h3>
+          <p>Four back-to-back slots per session. Questions are welcome throughout, so leave some room for them.</p>
+        </div>
+        <div>
+          <h3>Any stage of work</h3>
+          <p>A draft paper, a replication, a dataset you found, or an idea you had last week.</p>
+        </div>
+        <div>
+          <h3>Econ, ARE, and Haas</h3>
+          <p>First years from all three programs, plus anyone else who's interested. Come to present or just to listen and give feedback.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="faq">
+    <div class="wrap split">
+      <h2 class="title">FAQ</h2>
+      <div>
+        <details>
+          <summary>Can I cancel or swap my slot?</summary>
+          <p>Yes. Your confirmation email has a link to your talk's page, where you can move to another week with an open slot or cancel. You can also email <a href="mailto:berkeleyfirstyearworkshop@gmail.com">berkeleyfirstyearworkshop@gmail.com</a>.</p>
+        </details>
+        <details>
+          <summary>Can I choose my time?</summary>
+          <p>Slots fill in order so each session runs back to back. Sign up for a week and you get its next free slot.</p>
+        </details>
+        <details>
+          <summary>Can I sign up for more than one slot?</summary>
+          <p>You can hold one upcoming slot at a time so everyone gets a turn. Once you've presented, you can book again.</p>
+        </details>
+        <details>
+          <summary>Do I need an abstract?</summary>
+          <p>Yes, up to 100 words, so people know what your talk is about. It goes in the weekly email and on the schedule. If you don't have one yet, choose "Skip for now" when you sign up: you'll get a link to add it, and it's due a week before your session.</p>
+        </details>
+        <details>
+          <summary>I'm not in Econ, ARE, or Haas. Can I present?</summary>
+          <p>Yes. Choose Other when you sign up.</p>
+        </details>
+        <details>
+          <summary>Do I need slides?</summary>
+          <p>No. Slides, a blackboard, a one-page handout, or just talking all work.</p>
+        </details>
+        <details>
+          <summary>Can I come just to listen?</summary>
+          <p>Of course. Questions and feedback from the audience are the point.</p>
+        </details>
+        <details>
+          <summary>Can I write a blog post?</summary>
+          <p>Yes. Short posts of up to 1,000 words on an idea you're working on, a paper you liked, or something you've learned. <a href="blog/submit.html">Write a post</a>.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- site-footer -->
+<footer class="site-footer">
+  <div class="wrap footer-grid">
+    <div>
+      <a class="brand" href="./">First-Year Workshop</a>
+      <p>Informal weekly presentations by first-year PhD students in Economics, ARE, and Haas. Wednesdays, 3-4pm.</p>
+    </div>
+    <div>
+      <h2>Pages</h2>
+      <ul>
+        <li><a href="./#schedule">Schedule</a></li>
+        <li><a href="./blog/">Blog</a></li>
+        <li><a href="./blog/submit.html">Write a post</a></li>
+        <li><a href="./about.html">About</a></li>
+      </ul>
+    </div>
+    <div>
+      <h2>Contact</h2>
+      <p><a class="email" href="mailto:berkeleyfirstyearworkshop@gmail.com">berkeleyfirstyearworkshop@gmail.com</a></p>
+      <p><a href="./#list">Join the mailing list</a></p>
+    </div>
+  </div>
+</footer>
+<!-- /site-footer -->
+
+</body>
+</html>

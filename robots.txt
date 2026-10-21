@@ -1,0 +1,3 @@
+User-agent: *
+Disallow: /talk.html
+Sitemap: https://berkeley-firstyearworkshop.github.io/sitemap.xml

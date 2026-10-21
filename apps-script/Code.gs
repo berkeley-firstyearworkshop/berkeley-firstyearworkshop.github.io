@@ -5,14 +5,18 @@ const SKIP_DATES = ['2026-11-11', '2026-11-25']; // weeks with no session (Veter
 const SLOT_TIMES = ['15:00', '15:15', '15:30', '15:45'];
 const ALLOWED_EMAIL_DOMAIN = '';            // e.g. 'berkeley.edu' to restrict sign-ups; '' allows any
 const MAX_UPCOMING_PER_EMAIL = 1;           // max future slots one person can hold; 0 = no limit
+const ABSTRACT_WORDS = 100;                 // abstract limit; math isn't counted
+const ABSTRACTS_FROM = '2026-10-28';        // abstracts are required from this session on; optional before it
 const TZ = 'America/Los_Angeles';
 const SHEET_NAME = 'Bookings';
 // ==============================
 
-const HEADERS = ['slot_id', 'date', 'time', 'name', 'email', 'department', 'title', 'type', 'booked_at', 'link', 'link_type'];
+const HEADERS = ['slot_id', 'date', 'time', 'name', 'email', 'department', 'title', 'type', 'booked_at', 'link', 'link_type', 'abstract', 'abstract_at', 'booking_id'];
 
 function doGet(e) {
-  if (e && e.parameter && e.parameter.action === 'unsubscribe') return unsubscribePage_(e.parameter);
+  const p = (e && e.parameter) || {};
+  if (p.action === 'unsubscribe') return unsubscribePage_(p);
+  if (p.action === 'talk') return json_(talkInfo_(p));
   return json_({ ok: true, now: Date.now(), sessions: cachedSessions_() });
 }
 
@@ -43,6 +47,10 @@ function doPost(e) {
     let d;
     try { d = JSON.parse(e.postData.contents); } catch (err) { return json_({ ok: false, error: 'Invalid request.' }); }
     if (d.action === 'subscribe') return json_(subscribe_(d)); // mailing list, see Mailing.gs
+    if (d.action === 'post') return json_(submitPost_(d));     // blog submissions, see Blog.gs
+    if (d.action === 'abstract') return json_(saveAbstract_(d)); // the talk page, see below
+    if (d.action === 'move') return json_(moveTalk_(d));
+    if (d.action === 'cancel') return json_(cancelTalk_(d));
 
     const clean = {
       date: str_(d.date, 10),
@@ -53,8 +61,11 @@ function doPost(e) {
       type: str_(d.type, 10),
       link: str_(d.link, 500),
       linkType: str_(d.linkType, 40),
+      abstract: str_(d.abstract, 2000),
+      skipAbstract: d.skipAbstract === true,
     };
     if (!clean.link) clean.linkType = '';
+    clean.id = newBookingId_();
 
     const error = validate_(clean);
     if (error) return json_({ ok: false, error: error });
@@ -66,7 +77,7 @@ function doPost(e) {
       const today = today_();
       const held = rows.filter(r => r.email === clean.email && r.slot_id.slice(0, 10) >= today).length;
       if (held >= MAX_UPCOMING_PER_EMAIL) {
-        return json_({ ok: false, error: 'You already have an upcoming slot. Email the organisers to swap.' });
+        return json_({ ok: false, error: 'You already have an upcoming slot. Email the organizers to swap.' });
       }
     }
 
@@ -80,6 +91,7 @@ function doPost(e) {
     sheet.appendRow([
       id, clean.date, time,
       safe_(clean.name), clean.email, safe_(clean.department), safe_(clean.title), clean.type, new Date(), clean.link, safe_(clean.linkType),
+      safe_(clean.abstract), clean.abstract ? new Date() : '', clean.id,
     ]);
     clearCache_();
     let joinedList = false;
@@ -105,17 +117,25 @@ function validate_(c) {
   if (c.type !== 'paper' && c.type !== 'idea') return 'Choose paper or early-stage idea.';
   if (c.link && !isLink_(c.link)) return 'Enter a full link, starting with https://';
   if (c.link && !c.linkType) return 'Say what the link is.';
+  const words = countWords_(c.abstract);
+  if (words > ABSTRACT_WORDS) return 'Keep the abstract to ' + ABSTRACT_WORDS + ' words (it has ' + words + ').';
+  if (!c.abstract && abstractRequired_(c.date)) {
+    if (!c.skipAbstract) return 'Add an abstract, or choose to add it later.';
+    if (Date.now() >= abstractDeadline_(c.date)) return 'The abstract deadline for this session has passed, so add your abstract now.';
+  }
   return null;
 }
 
 function buildSessions_() {
   const booked = {};
   readBookings_(getSheet_()).forEach(r => {
-    booked[r.slot_id] = { name: r.name, department: r.department, title: r.title, type: r.type, link: r.link, linkType: r.linkType };
+    booked[r.slot_id] = { name: r.name, department: r.department, title: r.title, type: r.type, link: r.link, linkType: r.linkType, abstract: r.abstract };
   });
   // Emails stay in the sheet and are never returned to the page.
   return sessionDates_().map(date => ({
     date: date,
+    abstractRequired: abstractRequired_(date),
+    abstractDeadline: abstractDeadline_(date),
     slots: SLOT_TIMES.map(t => {
       const id = slotId_(date, t);
       return { id: id, time: t, booking: booked[id] || null };
@@ -141,7 +161,8 @@ function readBookings_(sheet) {
   const last = sheet.getLastRow();
   if (last < 2) return [];
   return sheet.getRange(2, 1, last - 1, HEADERS.length).getValues()
-    .map(r => ({
+    .map((r, i) => ({
+      row: i + 2,
       slot_id: String(r[0]).trim(),
       name: String(r[3]),
       email: String(r[4]).trim().toLowerCase(),
@@ -150,6 +171,8 @@ function readBookings_(sheet) {
       type: String(r[7]),
       link: isLink_(String(r[9]).trim()) ? String(r[9]).trim() : '',
       linkType: String(r[10]),
+      abstract: String(r[11]).trim(),
+      id: String(r[13]).trim(),
     }))
     .filter(r => r.slot_id);
 }
@@ -161,12 +184,127 @@ function getSheet_() {
     sheet = ss.insertSheet(SHEET_NAME);
     sheet.appendRow(HEADERS);
     sheet.setFrozenRows(1);
+  } else if (sheet.getLastColumn() < HEADERS.length) {
+    sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]); // adds new columns to an older sheet
   }
   return sheet;
 }
 
+// ----- Your talk: the personal page (talk.html) where presenters add an abstract, move, or cancel -----
+
+const abstractRequired_ = date => date >= ABSTRACTS_FROM;
+
+// Due 24 hours before the weekly announcement (ANNOUNCE in Mailing.gs), as a timestamp in ms.
+function abstractDeadline_(date) {
+  const day = shiftDate_(date, -(ANNOUNCE.daysBefore + 1));
+  return Utilities.parseDate(day + ' ' + String(ANNOUNCE.hour).padStart(2, '0') + ':00', TZ, 'yyyy-MM-dd HH:mm').getTime();
+}
+
+const LINK_ERROR = 'This link is not valid. Use the link in your confirmation email, or email the organizers.';
+const newBookingId_ = () => Utilities.getUuid().replace(/-/g, '').slice(0, 12);
+// The link carries the booking's ID and a signature, never the presenter's email, so it can't be used for
+// anyone else's talk. The ID stays with the booking when it moves, so earlier links keep working.
+const talkToken_ = id => token_('talk|' + id); // token_ is in Mailing.gs
+const talkLink_ = id => SITE_URL + 'talk.html?b=' + id + '&t=' + talkToken_(id);
+const timeOf_ = slotId => slotId.slice(11, 13) + ':' + slotId.slice(13, 15);
+
+// Bookings made before IDs existed get one the first time a link to them is needed.
+function bookingId_(b) {
+  if (!b.id) {
+    b.id = newBookingId_();
+    getSheet_().getRange(b.row, HEADERS.indexOf('booking_id') + 1).setValue(b.id);
+  }
+  return b.id;
+}
+
+function bookingForLink_(p) {
+  const id = str_(p.b, 20);
+  if (!id || String(p.t || '') !== talkToken_(id)) return null;
+  return readBookings_(getSheet_()).find(r => r.id === id) || null;
+}
+
+function talkInfo_(p) {
+  const b = bookingForLink_(p);
+  if (!b) return { ok: false, error: LINK_ERROR };
+  const date = b.slot_id.slice(0, 10);
+  const today = today_();
+  // Every other upcoming week with an open slot, and the slot a move there would get.
+  const moves = date < today ? [] : buildSessions_()
+    .filter(s => s.date >= today && s.date !== date)
+    .map(s => ({ date: s.date, slot: s.slots.find(x => !x.booking) }))
+    .filter(s => s.slot)
+    .map(s => ({ date: s.date, time: s.slot.time }));
+  return {
+    ok: true, date: date, time: timeOf_(b.slot_id), title: titleText_(b.title), name: b.name,
+    abstract: b.abstract, abstractRequired: abstractRequired_(date), deadline: abstractDeadline_(date),
+    past: date < today, moves: moves,
+  };
+}
+
+function saveAbstract_(d) {
+  const b = bookingForLink_(d);
+  if (!b) return { ok: false, error: LINK_ERROR };
+  if (b.slot_id.slice(0, 10) < today_()) return { ok: false, error: 'This talk has already happened.' };
+  const abstract = str_(d.abstract, 2000);
+  if (!abstract) return { ok: false, error: 'Add your abstract.' };
+  const words = countWords_(abstract);
+  if (words > ABSTRACT_WORDS) return { ok: false, error: 'Keep the abstract to ' + ABSTRACT_WORDS + ' words (it has ' + words + ').' };
+  getSheet_().getRange(b.row, HEADERS.indexOf('abstract') + 1, 1, 2).setValues([[safe_(abstract), new Date()]]);
+  clearCache_();
+  trySend_(() => sendAbstractNotice_(b, abstract)); // see Mailing.gs
+  return { ok: true };
+}
+
+// Moves the booking (same row, same ID) to the first open slot of another week.
+function moveTalk_(d) {
+  const b = bookingForLink_(d);
+  if (!b) return { ok: false, error: LINK_ERROR };
+  const from = b.slot_id.slice(0, 10);
+  const to = str_(d.date, 10);
+  const today = today_();
+  if (from < today) return { ok: false, error: 'This talk has already happened.' };
+  if (sessionDates_().indexOf(to) === -1 || to < today || to === from) return { ok: false, error: 'Choose another upcoming week.' };
+  if (!b.abstract && abstractRequired_(to) && Date.now() >= abstractDeadline_(to)) {
+    return { ok: false, error: "That week's abstract deadline has passed, so add your abstract before moving." };
+  }
+  const sheet = getSheet_();
+  const taken = new Set(readBookings_(sheet).map(r => r.slot_id));
+  const time = SLOT_TIMES.find(t => !taken.has(slotId_(to, t)));
+  if (!time) return { ok: false, error: 'That week just filled up. Choose another.' };
+  sheet.getRange(b.row, 1, 1, 3).setValues([[slotId_(to, time), to, time]]);
+  clearCache_();
+  trySend_(() => sendMoveNotice_(Object.assign({}, b, { slot_id: slotId_(to, time) }), b.slot_id)); // see Mailing.gs
+  return { ok: true, date: to, time: time };
+}
+
+// Deletes the booking's row, as canceling by hand does; the emails keep the details.
+function cancelTalk_(d) {
+  const b = bookingForLink_(d);
+  if (!b) return { ok: false, error: LINK_ERROR };
+  if (b.slot_id.slice(0, 10) < today_()) return { ok: false, error: 'This talk has already happened.' };
+  getSheet_().deleteRow(b.row);
+  clearCache_();
+  trySend_(() => sendCancelNotice_(b)); // see Mailing.gs
+  return { ok: true };
+}
+
+// Math and links are not counted: [link: ...] tags, web addresses, $$...$$, and inline $...$, which
+// follows pandoc's rule (opening $ before a non-space, closing $ after a non-space and not before a digit),
+// so "$5 and $10" stays as words. Keep in step with countWords in site.js and count_words in blog/blog.py.
+function countWords_(text) {
+  const prose = String(text || '')
+    .replace(/\[link:[^\]]*\]/gi, ' ')
+    .replace(/(?:https?:\/\/|www\.)\S+/gi, ' ')
+    .replace(/\$\$[\s\S]*?\$\$/g, ' ')
+    .replace(/\\\$/g, '')
+    .replace(/\$(?=[^\s$])(?:\\.|[^$\\])*?[^\s$\\]\$(?!\d)/g, ' ');
+  const words = prose.match(/\S+/g);
+  return words ? words.length : 0;
+}
+
 const slotId_ = (date, t) => date + '_' + t.replace(':', '');
 const today_ = () => Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd');
+const shiftDate_ = (iso, days) => { const d = new Date(iso + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + days); return d.toISOString().slice(0, 10); };
 // Only http(s): the link becomes an href on the page and in emails.
 const isLink_ = u => /^https?:\/\/\S+$/i.test(u);
 const str_ = (v, max) => String(v == null ? '' : v).trim().slice(0, max);

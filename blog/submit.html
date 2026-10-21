@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Write a blog post | UC Berkeley Economics First-Year Workshop</title>
+<meta name="description" content="Write a short blog post for the First-Year Workshop: an idea you're working on, a paper you liked, or something you've learned.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>">
+<link rel="preconnect" href="https://script.google.com">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../site.css">
+<link rel="stylesheet" href="blog.css">
+</head>
+<body>
+
+<p class="topnote" id="notice" hidden></p>
+
+<!-- site-header -->
+<header class="masthead">
+  <div class="wrap masthead-row">
+    <a class="brand" href="../">First-Year Workshop<span class="brand-sub">Econ, ARE, and Haas</span></a>
+    <nav class="nav" aria-label="Main">
+      <ul>
+        <li><a href="../#schedule">Schedule</a></li>
+        <li><a href="../blog/" aria-current="true">Blog</a></li>
+        <li><a href="../about.html">About</a></li>
+      </ul>
+    </nav>
+    <a class="btn btn-gold masthead-cta" href="../#schedule"><span class="long">Sign up to present</span><span class="short">Sign up</span></a>
+  </div>
+</header>
+<!-- /site-header -->
+
+<main>
+  <div class="wrap submit-wrap page-head">
+    <div class="page-head-inner">
+      <div>
+        <p class="crumb"><a href="./">Blog</a></p>
+        <h1>Write a blog post</h1>
+        <p class="lede">Share an idea you're working on, a paper you liked, or something you've learned this year. Fill out the form and we'll put it on the blog.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap submit-wrap">
+    <section class="ideas" aria-labelledby="ideas-h">
+      <h2 id="ideas-h">What to write about</h2>
+      <ul>
+        <li><strong>Research you're working on:</strong> a question you're exploring, an early result, or a problem you're stuck on.</li>
+        <li><strong>A paper review:</strong> a paper you've read closely, what it does, and where you'd push back.</li>
+        <li><strong>Something useful you've learned:</strong> a coding trick, a proof technique, or a way into a literature.</li>
+        <li><strong>Notes from a talk or conference:</strong> the papers presented at a Berkeley seminar or a conference you attended, and what you took from them. Keep it about the research.</li>
+        <li><strong>A dataset worth knowing about:</strong> what's in it, how to get access, and what questions it could answer.</li>
+        <li><strong>A method explained:</strong> an estimator, an identification strategy, or a numerical method, with the intuition first.</li>
+        <li><strong>An open question:</strong> a puzzle you think deserves a paper, and why existing work doesn't settle it.</li>
+      </ul>
+    </section>
+
+    <section class="rules" aria-labelledby="rules-h">
+      <h2 id="rules-h">Guidelines and rules</h2>
+      <ul>
+        <li><strong>Who you're writing for:</strong> PhD students across Econ, ARE, and Haas, not just your own field. Explain terms and notation that others might not know, and keep the math to what your argument needs.</li>
+        <li><strong>Length:</strong> up to 1,000 words. Math and links don't count toward the limit.</li>
+        <li><strong>Math:</strong> welcome. Write it in LaTeX, with <code>$…$</code> for inline math and <code>$$…$$</code> for a displayed equation, for example <code>$\beta R$</code> or <code>$$u'(c_t) = \beta R\, E_t[u'(c_{t+1})]$$</code>.</li>
+        <li><strong>Links:</strong> put the link in square brackets right after what it refers to, for example <code>As Acemoglu (2025) [link: https://…] shows</code>. The reference becomes the link.</li>
+        <li><strong>Proofread first:</strong> posts go up as written, so make sure yours is polished before you submit.</li>
+        <li><strong>Images you can use:</strong> your own photo or research figure, or an image licensed for reuse (Unsplash, Pexels, CC0 or public domain, or CC BY with credit).</li>
+        <li><strong>Not allowed:</strong> images from Google Images or news sites, figures from published journal articles, and logos.</li>
+        <li><strong>Copyright:</strong> you keep the copyright to your post. By submitting, you let us publish it on this site and confirm you have the right to share everything in it, including the image. You're responsible for any copyright or other problems with what you submit.</li>
+      </ul>
+      <p>To request removal of an image, email <a href="mailto:berkeleyfirstyearworkshop@gmail.com">berkeleyfirstyearworkshop@gmail.com</a>.</p>
+    </section>
+
+    <div class="thanks" id="thanks" role="status" hidden>
+      <h2>Thanks, your post is in</h2>
+      <p>It's gone to the organizers, who will add it to the blog. If there's a problem, they'll email you.</p>
+      <button class="btn btn-secondary" type="button" id="again">Write another</button>
+    </div>
+
+    <form class="post-form" id="postForm" novalidate>
+      <div class="pair">
+        <label>Name <input id="name" name="name" required maxlength="100" autocomplete="name"></label>
+        <label>Program
+          <select id="program" name="program" required>
+            <option value="" disabled selected>Choose one</option>
+            <option>Econ</option><option>ARE</option><option>Haas</option><option>Other</option>
+          </select>
+        </label>
+        <label>Email <input id="email" name="email" type="email" required maxlength="120" autocomplete="email"></label>
+        <label class="check"><input type="checkbox" id="hideEmail" name="hideEmail"> Hide my email on the blog post</label>
+      </div>
+
+      <label>Post title <input id="title" name="title" required maxlength="200"></label>
+
+      <div class="field">
+        <label>Post text
+          <span class="hint">Plain text. Leave a blank line between paragraphs. Write math in LaTeX: <span style="white-space:nowrap">$…$</span> inline, <span style="white-space:nowrap">$$…$$</span> for a displayed equation. Add a link as <span style="white-space:nowrap">[link: https://…]</span> right after what it refers to.</span>
+          <textarea id="text" name="text" rows="16" required maxlength="40000"></textarea>
+        </label>
+        <p class="counter" id="textCount"><span>Math and links aren't counted.</span><span class="count" aria-live="polite"></span></p>
+      </div>
+
+      <div class="field">
+        <span class="field-label" id="imageLabel">Image <span class="hint">(optional)</span></span>
+        <span class="hint">JPG, PNG, or WebP. It goes at the top of your post and is its thumbnail on the blog page. Without one, the post gets a default banner.</span>
+        <div class="picker" id="picker">
+          <label class="btn btn-secondary" for="imageInput">Choose an image</label>
+          <input class="visually-hidden" type="file" id="imageInput" accept="image/jpeg,image/png,image/webp" aria-labelledby="imageLabel">
+          <span class="hint" id="pickerNote">No image chosen</span>
+        </div>
+        <div class="picked" id="picked" hidden>
+          <img id="preview" alt="Preview of the chosen image">
+          <div class="file"><p class="name" id="fileName"></p><p class="dims" id="fileDims"></p></div>
+          <button class="btn btn-secondary" type="button" id="removeImage">Remove</button>
+        </div>
+      </div>
+
+      <label>Image source / credit
+        <span class="hint">Required if you add an image. Shown under it, for example "My own photo," "Figure from my own analysis," or "Photo by Jane Doe on Unsplash."</span>
+        <input id="credit" name="credit" maxlength="300">
+      </label>
+
+      <label class="check"><input type="checkbox" id="agree" name="agree" required> I've read the guidelines and rules. My post is ready to publish as written, I have the right to publish it and any image I've attached, and I take responsibility for them.</label>
+
+      <p class="error" id="formError" role="alert" hidden></p>
+
+      <div class="send">
+        <button class="btn btn-primary" type="submit" id="submitBtn">Submit post</button>
+        <span>Your post goes to the organizers, who add it to the blog as written.</span>
+      </div>
+    </form>
+  </div>
+</main>
+
+<!-- site-footer -->
+<footer class="site-footer">
+  <div class="wrap footer-grid">
+    <div>
+      <a class="brand" href="../">First-Year Workshop</a>
+      <p>Informal weekly presentations by first-year PhD students in Economics, ARE, and Haas. Wednesdays, 3-4pm.</p>
+    </div>
+    <div>
+      <h2>Pages</h2>
+      <ul>
+        <li><a href="../#schedule">Schedule</a></li>
+        <li><a href="../blog/">Blog</a></li>
+        <li><a href="../blog/submit.html">Write a post</a></li>
+        <li><a href="../about.html">About</a></li>
+      </ul>
+    </div>
+    <div>
+      <h2>Contact</h2>
+      <p><a class="email" href="mailto:berkeleyfirstyearworkshop@gmail.com">berkeleyfirstyearworkshop@gmail.com</a></p>
+      <p><a href="../#list">Join the mailing list</a></p>
+    </div>
+  </div>
+</footer>
+<!-- /site-footer -->
+
+<script src="../site.js"></script>
+<script>
+const POST_WORDS = 1000;
+const MAX_FILE = 15 * 1024 * 1024;
+const MAX_EDGE = 2000;      // long edge after resizing in the browser
+const MAX_PNG = 4e6;        // base64 characters; bigger PNGs (usually photos) are re-encoded as JPEG
+const form = $('postForm');
+let image = null;           // { name, type, data } once a file has been chosen and resized
+
+const fits = wordCounter($('text'), $('textCount'), POST_WORDS);
+const syncSubmit = () => { $('submitBtn').disabled = !fits(); };
+$('text').addEventListener('input', syncSubmit);
+
+if (DEMO) {
+  $('notice').textContent = 'Preview mode: posts are not sent.';
+  $('notice').hidden = false;
+}
+
+function showError(msg, field) {
+  $('formError').textContent = msg;
+  $('formError').hidden = false;
+  if (field) field.focus();
+}
+
+// Resizing in a canvas keeps the upload small and drops the photo's metadata, including GPS location.
+async function shrink(file, asJpeg) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((ok, bad) => { const i = new Image(); i.onload = () => ok(i); i.onerror = bad; i.src = url; });
+    const scale = Math.min(1, MAX_EDGE / Math.max(img.naturalWidth, img.naturalHeight));
+    const w = Math.round(img.naturalWidth * scale), h = Math.round(img.naturalHeight * scale);
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    const png = file.type === 'image/png' && !asJpeg;
+    if (!png) { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); }
+    ctx.drawImage(img, 0, 0, w, h);
+    const type = png ? 'image/png' : 'image/jpeg';
+    const dataUrl = canvas.toDataURL(type, 0.85);
+    const name = file.name.replace(/\.[^.]*$/, '') + (png ? '.png' : '.jpg');
+    return { name, type, data: dataUrl.slice(dataUrl.indexOf(',') + 1), preview: dataUrl, w, h };
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+$('imageInput').addEventListener('change', async () => {
+  const file = $('imageInput').files[0];
+  $('formError').hidden = true;
+  if (!file) return;
+  if (!/^image\/(jpeg|png|webp)$/.test(file.type)) return clearImage('Choose a JPG, PNG, or WebP image.');
+  if (file.size > MAX_FILE) return clearImage('That image is over 15 MB. Choose a smaller one.');
+  $('pickerNote').textContent = 'Preparing…';
+  try {
+    let out = await shrink(file, false);
+    if (out.type === 'image/png' && out.data.length > MAX_PNG) out = await shrink(file, true);
+    image = { name: out.name, type: out.type, data: out.data };
+    $('preview').src = out.preview;
+    $('fileName').textContent = file.name;
+    $('fileDims').textContent = `${out.w} × ${out.h} px, ready to send`;
+    $('picker').hidden = true;
+    $('picked').hidden = false;
+  } catch (e) {
+    clearImage("That image couldn't be read. Try a JPG or PNG.");
+  }
+});
+
+function clearImage(msg) {
+  image = null;
+  $('imageInput').value = '';
+  $('pickerNote').textContent = 'No image chosen';
+  $('picker').hidden = false;
+  $('picked').hidden = true;
+  if (msg) showError(msg);
+}
+$('removeImage').addEventListener('click', () => clearImage());
+
+form.addEventListener('submit', async e => {
+  e.preventDefault();
+  $('formError').hidden = true;
+  const v = id => $(id).value.trim();
+  if (!v('name')) return showError('Add your name.', $('name'));
+  if (!$('email').checkValidity() || !v('email')) return showError('Enter a valid email address.', $('email'));
+  if (!v('program')) return showError('Choose your program.', $('program'));
+  if (!v('title')) return showError('Add a title.', $('title'));
+  if (!v('text')) return showError('Add the text of your post.', $('text'));
+  if (!fits()) return showError(`Your post is over ${POST_WORDS.toLocaleString('en-US')} words. Shorten it to submit.`, $('text'));
+  if (image && !v('credit')) return showError('Add where the image comes from.', $('credit'));
+  if (!$('agree').checked) return showError("Check the box to confirm you've read the guidelines and rules.", $('agree'));
+
+  const payload = {
+    action: 'post',
+    name: v('name'), email: v('email'), hideEmail: $('hideEmail').checked, program: v('program'),
+    title: v('title'), text: $('text').value, credit: v('credit'), agree: true, image,
+  };
+  const btn = $('submitBtn');
+  btn.disabled = true; btn.textContent = 'Sending…';
+  try {
+    const d = DEMO ? await new Promise(ok => setTimeout(() => ok({ ok: true }), 600)) : await api(payload);
+    if (!d.ok) return showError(d.error);
+    form.hidden = true;
+    $('thanks').hidden = false;
+    $('thanks').scrollIntoView({ block: 'center' });
+  } catch (err) {
+    showError('Your post did not go through. Check your connection and try again. Your text is still here.');
+  } finally {
+    btn.textContent = 'Submit post';
+    syncSubmit();
+  }
+});
+
+$('again').addEventListener('click', () => {
+  form.reset();
+  clearImage();
+  fits();
+  syncSubmit();
+  $('thanks').hidden = true;
+  form.hidden = false;
+  $('title').focus();
+});
+</script>
+</body>
+</html>
