@@ -9,9 +9,11 @@ const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyKSG1n4KbB1eWgaFmq
 const ROOM = 'Room C330, Cheit Hall, Haas';
 const REMINDER = { daysBefore: 2, hour: 9 };    // presenters: Monday 9am before a Wednesday session
 const ANNOUNCE = { daysBefore: 6, hour: 10 };   // mailing list: Thursday 10am the week before
-// Abstracts are due 24 hours before ANNOUNCE (see abstractDeadline_ in Code.gs). Presenters without one
-// get a reminder 3 days before ANNOUNCE (Monday 9am for a Wednesday session), copied to ADMIN_EMAIL.
+// Abstracts (and titles still TBD) are due 24 hours before ANNOUNCE (see abstractDeadline_ in Code.gs). Presenters
+// missing either get a reminder 3 days before ANNOUNCE (Monday 9am for a Wednesday session) and a final one
+// 2½ hours before it (Thursday 7:30am, give or take 15 minutes: Apps Script's precision), both copied to ADMIN_EMAIL.
 const ABSTRACT_REMINDER = { daysBefore: ANNOUNCE.daysBefore + 3, hour: 9 };
+const FINAL_REMINDER = { daysBefore: ANNOUNCE.daysBefore, hour: ANNOUNCE.hour - 3, minute: 30 };
 const BLOG_DIGEST = { weekday: 'SUNDAY', hour: 19 };  // new blog posts to the mailing list; skipped when there are none
 const SKIP_EMPTY_WEEKS = true;                  // no list email when nobody has signed up
 const SUBSCRIBERS_SHEET = 'Subscribers';
@@ -23,16 +25,17 @@ const FORMAT_NOTE = 'You have 15 minutes and questions are welcome throughout, s
 const WELCOME_NOTE = 'Everyone is welcome to participate!';
 const OPEN_NOTE = "You don't need a finished paper to present: a rough idea, an early result, or a question you're stuck on all make for a good 15 minutes.";
 
-// Run once from the editor (and again after changing REMINDER, ANNOUNCE, or BLOG_DIGEST).
+// Run once from the editor (and again after changing REMINDER, ANNOUNCE, BLOG_DIGEST, or adding a trigger).
 // The daily triggers only send when a session is exactly `daysBefore` days away.
 function setupTriggers() {
-  const handlers = ['sendPresenterReminders', 'sendWeeklyAnnouncement', 'sendAbstractReminders', 'sendBlogDigest'];
+  const handlers = ['sendPresenterReminders', 'sendWeeklyAnnouncement', 'sendAbstractReminders', 'sendFinalReminders', 'sendBlogDigest'];
   ScriptApp.getProjectTriggers()
     .filter(t => handlers.indexOf(t.getHandlerFunction()) !== -1)
     .forEach(t => ScriptApp.deleteTrigger(t));
   ScriptApp.newTrigger('sendPresenterReminders').timeBased().everyDays(1).atHour(REMINDER.hour).inTimezone(TZ).create();
   ScriptApp.newTrigger('sendWeeklyAnnouncement').timeBased().everyDays(1).atHour(ANNOUNCE.hour).inTimezone(TZ).create();
   ScriptApp.newTrigger('sendAbstractReminders').timeBased().everyDays(1).atHour(ABSTRACT_REMINDER.hour).inTimezone(TZ).create();
+  ScriptApp.newTrigger('sendFinalReminders').timeBased().everyDays(1).atHour(FINAL_REMINDER.hour).nearMinute(FINAL_REMINDER.minute).inTimezone(TZ).create();
   ScriptApp.newTrigger('sendBlogDigest').timeBased().onWeekDay(ScriptApp.WeekDay[BLOG_DIGEST.weekday]).atHour(BLOG_DIGEST.hour).inTimezone(TZ).create();
 }
 
@@ -52,7 +55,8 @@ function testEmails() {
   sendWelcome_(me);
   reminders_(me);
   announce_(me);
-  sendAbstractReminder_(s.date, { time: time, booking: { name: sample.name, email: me, title: sample.title, id: sample.id } }, me);
+  sendAbstractReminder_(s.date, { time: time, booking: { name: sample.name, email: me, title: 'TBD', id: sample.id } }, me);
+  sendAbstractReminder_(s.date, { time: time, booking: { name: sample.name, email: me, title: 'TBD', id: sample.id } }, me, true);
   const talk = { id: sample.id, slot_id: slotId_(s.date, time), name: sample.name, email: me, title: sample.title, department: 'Econ', type: 'paper', abstract: '' };
   sendMoveNotice_(talk, slotId_(shiftDate_(s.date, 7), time), me);
   sendCancelNotice_(talk, me);
@@ -63,27 +67,25 @@ function testEmails() {
 
 function sendPresenterReminders() { reminders_(null); }
 function sendWeeklyAnnouncement() { announce_(null); }
-function sendAbstractReminders() { abstractReminders_(); }
+function sendAbstractReminders() { abstractReminders_(false); }
+function sendFinalReminders() { abstractReminders_(true); }
 function sendBlogDigest() { blogDigest_(null); }
 
 // ----- Booking confirmation (called from Code.gs), with a calendar invite -----
 // joinedList: they were just added to the mailing list, so say so and give them a way out.
 function sendBookingConfirmation_(c, time, joinedList) {
-  const tbd = String(c.title).trim().toUpperCase() === 'TBD';
-  const when = `${fmtLong_(c.date)}, ${slotRange_(time)}pm`;
-  const invite = ics_({
-    uid: `${c.id}-presenter@${host_()}`,
-    date: c.date,
-    summary: `${SEMINAR_NAME}: presenting at ${fmt12_(time)}pm`,
-    description: `Your slot: ${slotRange_(time)}pm\nTitle: ${c.title}\n\n${SITE_URL}`,
-  });
-  const tbdNote = "When you have a title, reply to this email and we'll update the schedule.";
+  const tbd = isTbd_(c.title);
+  const fixed = timesFixed_(c.date);
+  const when = talkWhen_(c.date, time);
+  const invite = talkInvite_(c.id, c.date, time, c.title);
   const talk = talkLink_(c.id);
   const manageNote = `Can't make it? Move to another week or cancel on your talk's page: ${talk} You can also reply to this email.`;
   const listNote = "We've also added you to the mailing list, which sends the line-up before each session.";
   const unsub = joinedList ? unsubscribeLink_(c.email) : '';
   const absLink = talk + '#abstract';
-  const absDue = fmtDeadline_(abstractDeadline_(c.date));
+  const deadline = abstractDeadline_(c.date);
+  const absDue = fmtDeadline_(deadline);
+  const titleBy = Date.now() < deadline ? `by ${absDue}` : 'as soon as you can';
   const absNeeded = abstractRequired_(c.date);
   const absNote = absNeeded
     ? `Your abstract is due by ${absDue}, 24 hours before the line-up goes to the mailing list: up to 100 words on the question, why it matters, and any results so far. Add it here: ${absLink}`
@@ -97,10 +99,10 @@ Thanks for signing up to present at the ${SEMINAR_NAME}.
 When: ${when} (the session runs ${sessionRange_()})
 Where: ${ROOM}
 Title: ${c.title}
-${c.link ? `${c.linkType}: ${c.link}\n` : ''}${c.abstract ? `Abstract: ${c.abstract}\n` : ''}
-${c.abstract ? absEdit : absNote}
+${c.link ? `${c.linkType}: ${c.link}\n` : ''}${c.abstract ? `Abstract: ${c.abstract}\n` : ''}${fixed ? '' : `\n${orderNote_(c.date)}\n`}
+${tbd ? `Please add your title ${titleBy}, on your talk's page: ${talk}#title\n\n` : ''}${c.abstract ? absEdit : absNote}
 
-${tbd ? tbdNote + '\n\n' : ''}${FORMAT_NOTE} A calendar invite is attached, and we'll send a reminder nearer the time.
+${FORMAT_NOTE} A calendar invite is attached, and we'll send a reminder nearer the time.
 
 ${manageNote}
 
@@ -110,16 +112,17 @@ ${SITE_URL}`;
     ${p_(`Hi ${h_(firstName_(c.name))},`)}
     ${p_(`Thanks for signing up to present at the ${h_(SEMINAR_NAME)}.`)}
     ${details_([['When', `${when} (session runs ${sessionRange_()})`], ['Where', ROOM], ['Title', c.title]].concat(c.link ? [[c.linkType, linkHtml_(c), true]] : []))}
+    ${fixed ? '' : p_(h_(orderNote_(c.date)))}
+    ${tbd ? p_(`<strong>Please add your title ${h_(titleBy)}</strong>, on <a href="${h_(talk + '#title')}" style="color:#003262">your talk's page</a>.`) : ''}
     ${c.abstract
       ? abstractHtml_(c.abstract) + p_(`<a href="${h_(absLink)}" style="color:#003262">Change your abstract</a>`)
       : absNeeded
         ? p_(`<strong>Your abstract is due by ${h_(absDue)}</strong>, 24 hours before the line-up goes to the mailing list. Up to 100 words on the question, why it matters, and any results so far.`) + button_(absLink, 'Add your abstract')
         : p_(`An abstract is optional for this session. If you'd like one in the line-up email, <a href="${h_(absLink)}" style="color:#003262">add it here</a>.`)}
-    ${tbd ? p_(tbdNote) : ''}
     ${p_(`${FORMAT_NOTE} A calendar invite is attached, and we'll send a reminder nearer the time.`)}
     ${p_(`Can't make it? <a href="${h_(talk)}" style="color:#003262">Move to another week or cancel</a> on your talk's page, or reply to this email.`)}
     ${joinedList ? p_(`${listNote} <a href="${unsub}" style="color:#003262">Unsubscribe</a> if you'd rather not get it.`) : ''}`);
-  send_({ to: c.email, subject: `You're presenting on ${fmtLong_(c.date)} at ${fmt12_(time)}pm`, body: text, htmlBody: html, attachments: [invite] });
+  send_({ to: c.email, subject: `You're presenting on ${fmtLong_(c.date)}${fixed ? ` at ${fmt12_(time)}pm` : ''}`, body: text, htmlBody: html, attachments: [invite] });
 }
 
 // ----- Sign-up notice to the organizers (called from Code.gs). Replying goes to the presenter. -----
@@ -127,7 +130,7 @@ function sendAdminNotice_(c, time, to) {
   const text =
 `${c.name} signed up to present.
 
-When: ${fmtLong_(c.date)}, ${slotRange_(time)}pm
+When: ${fmtLong_(c.date)}, ${slotRange_(time)}pm${timesFixed_(c.date) ? '' : ' for now (talks move up if someone cancels, until the line-up goes out)'}
 Name: ${c.name}
 Email: ${c.email}
 Department: ${c.department}
@@ -139,7 +142,7 @@ Bookings sheet: ${SpreadsheetApp.getActiveSpreadsheet().getUrl()}`;
   send_({
     to: to || ADMIN_EMAIL || Session.getEffectiveUser().getEmail(),
     replyTo: c.email,
-    subject: `New sign-up: ${c.name}, ${fmtLong_(c.date)} at ${fmt12_(time)}pm`,
+    subject: `New sign-up: ${c.name}, ${fmtLong_(c.date)}`,
     body: text,
   });
 }
@@ -155,27 +158,35 @@ function sendAbstractNotice_(b, abstract) {
   });
 }
 
+function sendTitleNotice_(b, title) {
+  const date = b.slot_id.slice(0, 10);
+  const was = isTbd_(b.title) ? '' : ` It was "${b.title}".`;
+  send_({
+    to: ADMIN_EMAIL || Session.getEffectiveUser().getEmail(),
+    replyTo: b.email,
+    subject: `Title ${was ? 'changed' : 'added'}: ${b.name}, ${fmtLong_(date)}`,
+    body: `${b.name}'s talk on ${fmtLong_(date)} is now titled "${title}".${was}\n\nBookings sheet: ${SpreadsheetApp.getActiveSpreadsheet().getUrl()}`,
+  });
+}
+
 // ----- Moved or canceled through the talk page (called from Code.gs). testTo: send both emails there instead. -----
 function sendMoveNotice_(b, fromSlot, testTo) {
   const date = b.slot_id.slice(0, 10), time = timeOf_(b.slot_id), fromDate = fromSlot.slice(0, 10);
-  const when = `${fmtLong_(date)}, ${slotRange_(time)}pm`;
-  const was = `${fmtLong_(fromDate)}, ${slotRange_(timeOf_(fromSlot))}pm`;
+  const fixed = timesFixed_(date);
+  const when = talkWhen_(date, time);
+  const was = talkWhen_(fromDate, timeOf_(fromSlot));
   const talk = talkLink_(b.id);
-  const invite = ics_({
-    uid: `${b.id}-presenter@${host_()}`,
-    date: date,
-    summary: `${SEMINAR_NAME}: presenting at ${fmt12_(time)}pm`,
-    description: `Your slot: ${slotRange_(time)}pm\nTitle: ${titleText_(b.title)}\n\n${SITE_URL}`,
-  });
-  const calNote = `The attached calendar invite is for the new time. If your calendar still shows ${fmtLong_(fromDate)}, delete that event.`;
-  const absNote = !b.abstract && abstractRequired_(date) ? `Your abstract is due by ${fmtDeadline_(abstractDeadline_(date))}.` : '';
+  const invite = talkInvite_(b.id, date, time, b.title);
+  const calNote = `The attached calendar invite is for the new date. If your calendar still shows ${fmtLong_(fromDate)}, delete that event.`;
+  const need = missing_(date, b);
+  const dueNote = need.length ? `Your ${need.join(' and ')} ${need.length > 1 ? 'are' : 'is'} due by ${fmtDeadline_(abstractDeadline_(date))}.` : '';
   const text =
 `Hi ${firstName_(b.name)},
 
 Your talk has moved to ${when}, ${ROOM}. It was ${was}.
-
+${fixed ? '' : '\n' + orderNote_(date) + '\n'}
 ${calNote}
-${absNote ? '\n' + absNote + '\n' : ''}
+${dueNote ? '\n' + dueNote + '\n' : ''}
 Your talk's page: ${talk}
 
 ${SEMINAR_NAME}
@@ -183,10 +194,11 @@ ${SITE_URL}`;
   const html = shell_('Your talk has moved', `${when}, ${ROOM}`, `
     ${p_(`Hi ${h_(firstName_(b.name))},`)}
     ${p_(`Your talk has moved to <strong>${h_(when)}</strong>, ${h_(ROOM)}. It was ${h_(was)}.`)}
+    ${fixed ? '' : p_(h_(orderNote_(date)))}
     ${p_(h_(calNote))}
-    ${absNote ? p_(h_(absNote)) : ''}
+    ${dueNote ? p_(h_(dueNote)) : ''}
     ${button_(talk, "Your talk's page")}`);
-  send_({ to: testTo || b.email, subject: `Your talk has moved to ${fmtLong_(date)} at ${fmt12_(time)}pm`, body: text, htmlBody: html, attachments: [invite] });
+  send_({ to: testTo || b.email, subject: `Your talk has moved to ${fmtLong_(date)}${fixed ? ` at ${fmt12_(time)}pm` : ''}`, body: text, htmlBody: html, attachments: [invite] });
   send_({
     to: testTo || ADMIN_EMAIL || Session.getEffectiveUser().getEmail(),
     replyTo: b.email,
@@ -197,11 +209,12 @@ ${SITE_URL}`;
 
 function sendCancelNotice_(b, testTo) {
   const date = b.slot_id.slice(0, 10), time = timeOf_(b.slot_id);
-  const when = `${fmtLong_(date)}, ${slotRange_(time)}pm`;
+  const fixed = timesFixed_(date);
+  const when = talkWhen_(date, time);
   const invite = ics_({
     uid: `${b.id}-presenter@${host_()}`,
     date: date,
-    summary: `${SEMINAR_NAME}: presenting at ${fmt12_(time)}pm (canceled)`,
+    summary: `${SEMINAR_NAME}: presenting (canceled)`,
     description: `Canceled.\n\n${SITE_URL}`,
     cancel: true,
   });
@@ -223,8 +236,9 @@ ${SITE_URL}`;
   send_({
     to: testTo || ADMIN_EMAIL || Session.getEffectiveUser().getEmail(),
     replyTo: b.email,
-    subject: `Canceled: ${b.name}, ${fmtLong_(date)} at ${fmt12_(time)}pm`,
-    body: `${b.name} canceled "${titleText_(b.title)}" (${when}) on their talk page. The slot is open again.\n\n` +
+    subject: `Canceled: ${b.name}, ${fmtLong_(date)}`,
+    body: `${b.name} canceled "${titleText_(b.title)}" (${fmtLong_(date)}, ${slotRange_(time)}pm) on their talk page. ` +
+      `${fixed ? 'The line-up had gone out, so the slot is open and the other talks keep their times.' : 'The talks after it have moved up.'}\n\n` +
       `Email: ${b.email}\nDepartment: ${b.department}\nType: ${TYPE_LABEL[b.type] || b.type}${b.abstract ? `\nAbstract: ${b.abstract}` : ''}\n\n` +
       `Bookings sheet: ${SpreadsheetApp.getActiveSpreadsheet().getUrl()}`,
   });
@@ -264,59 +278,70 @@ ${SITE_URL}blog/`;
   send_({ to: c.email, subject: `Thanks for your blog post: ${c.title}`, body: text, htmlBody: html });
 }
 
-// ----- Abstract reminders: presenters still without one, copied to the organizers -----
-function abstractReminders_() {
-  const s = sessionInDays_(ABSTRACT_REMINDER.daysBefore);
-  if (!s || !abstractRequired_(s.date)) return;
-  const missing = s.slots.filter(x => x.booking && !x.booking.abstract);
+// ----- Abstract reminders: presenters still without an abstract or with a TBD title, copied to the organizers -----
+// What a talk still needs before the line-up email.
+const missing_ = (date, b) => [isTbd_(b.title) && 'title', abstractRequired_(date) && !b.abstract && 'abstract'].filter(Boolean);
+
+// final: the last call, the morning of the line-up email.
+function abstractReminders_(final) {
+  const s = sessionInDays_(final ? FINAL_REMINDER.daysBefore : ABSTRACT_REMINDER.daysBefore);
+  if (!s) return;
+  const missing = s.slots.filter(x => x.booking && missing_(s.date, x.booking).length);
   if (!missing.length) return;
-  if (!claimSend_('abstract_' + s.date)) return;
-  missing.forEach(x => sendAbstractReminder_(s.date, x, null));
+  if (!claimSend_((final ? 'final_' : 'abstract_') + s.date)) return;
+  missing.forEach(x => sendAbstractReminder_(s.date, x, null, final));
 }
 
-// Run by hand from the editor: asks presenters at the next session that needs abstracts, and who
-// haven't added one, for it now. For when the automatic Monday reminder has already passed.
+// Run by hand from the editor: asks presenters at the next session that needs abstracts, and who haven't
+// added one (or still have a TBD title), for it now. For when the automatic Monday reminder has already passed.
 function remindNextSessionAbstracts() {
   const today = today_();
   const date = sessionDates_().find(d => d >= today && abstractRequired_(d));
   if (!date) return Logger.log('No upcoming session needs abstracts.');
-  const missing = sessionData_(date).slots.filter(x => x.booking && !x.booking.abstract);
+  const missing = sessionData_(date).slots.filter(x => x.booking && missing_(date, x.booking).length);
   missing.forEach(x => sendAbstractReminder_(date, x, null));
-  Logger.log(`Asked ${missing.length} presenter(s) on ${date} for their abstract.`);
+  Logger.log(`Asked ${missing.length} presenter(s) on ${date} for their abstract or title.`);
 }
 
-function sendAbstractReminder_(date, x, testTo) {
+function sendAbstractReminder_(date, x, testTo, final) {
   const b = x.booking;
-  const link = talkLink_(bookingId_(b)) + '#abstract';
+  const need = missing_(date, b);
+  const what = need.join(' and '), it = need.length > 1 ? 'them' : 'it', is = need.length > 1 ? 'are' : 'is';
+  const talk = talkLink_(bookingId_(b));
+  const link = talk + '#' + need[0];
   const deadline = abstractDeadline_(date);
   const due = fmtDeadline_(deadline);
   // Past the deadline (a late manual reminder), ask for it before the line-up email goes out instead.
   const late = Date.now() >= deadline;
-  const ask = late
-    ? `Please add it as soon as you can, before the line-up goes to the mailing list on ${fmtDeadline_(deadline + 864e5)}`
-    : `Please add it by ${due}, 24 hours before the line-up goes to the mailing list`;
-  const when = `${fmtLong_(date)}, ${slotRange_(x.time)}pm`;
+  const ask = final
+    ? `The line-up goes to the mailing list today at ${ANNOUNCE.hour % 12 || 12}${ANNOUNCE.hour < 12 ? 'am' : 'pm'}, so please add ${it} as soon as possible`
+    : late
+      ? `Please add ${it} as soon as you can, before the line-up goes to the mailing list on ${fmtDeadline_(deadline + 864e5)}`
+      : `Please add ${it} by ${due}, 24 hours before the line-up goes to the mailing list`;
+  const lack = `we ${final ? 'still ' : ''}don't have your ${need.join(' or ')}${final ? '' : ' yet'}`;
+  const heading = final ? `Final reminder: add your ${what}` : `Your ${what} ${is} due soon`;
+  const absNote = need.indexOf('abstract') !== -1 ? 'The abstract is up to 100 words on the question, why it matters, and any results so far.' : '';
+  const manage = "If you can no longer make it, you can move to another week or cancel on your talk's page.";
+  const when = talkWhen_(date, x.time);
   const text =
 `Hi ${firstName_(b.name)},
 
-You're presenting at the ${SEMINAR_NAME} on ${when}, and we don't have your abstract yet.
+You're presenting at the ${SEMINAR_NAME} on ${when}, and ${lack}.
 
 ${ask}:
 ${link}
-
-Up to 100 words on the question, why it matters, and any results so far.
-
-If you can no longer make your slot, reply to this email.
+${absNote ? '\n' + absNote + '\n' : ''}
+${manage}
 
 ${SEMINAR_NAME}
 ${SITE_URL}`;
-  const html = shell_('Your abstract is due soon', when, `
+  const html = shell_(heading, when, `
     ${p_(`Hi ${h_(firstName_(b.name))},`)}
-    ${p_(`You're presenting at the ${h_(SEMINAR_NAME)} on ${h_(when)}, and we don't have your abstract yet.`)}
-    ${p_(`${h_(ask)}. Up to 100 words on the question, why it matters, and any results so far.`)}
-    ${button_(link, 'Add your abstract')}
-    ${p_('If you can no longer make your slot, reply to this email.')}`);
-  const subject = late ? 'Your abstract is needed as soon as possible' : `Your abstract is due ${due}`;
+    ${p_(`You're presenting at the ${h_(SEMINAR_NAME)} on ${h_(when)}, and ${lack}.`)}
+    ${p_(`${h_(ask)}.${absNote ? ' ' + h_(absNote) : ''}`)}
+    ${button_(link, `Add your ${what}`)}
+    ${p_(`If you can no longer make it, you can move to another week or cancel on <a href="${h_(talk)}" style="color:#003262">your talk's page</a>.`)}`);
+  const subject = final ? heading : late ? `Your ${what} ${is} needed as soon as possible` : `Your ${what} ${is} due ${due}`;
   const msg = { to: testTo || b.email, replyTo: ADMIN_EMAIL || undefined, subject: subject, body: text, htmlBody: html };
   if (!testTo && ADMIN_EMAIL) msg.cc = ADMIN_EMAIL;
   send_(msg);
@@ -363,10 +388,9 @@ ${SITE_URL}`;
 
 // ----- Announcement to the list, with a calendar invite -----
 function announce_(testTo) {
-  const s = testTo ? nextSession_() : sessionInDays_(ANNOUNCE.daysBefore);
+  let s = testTo ? nextSession_() : sessionInDays_(ANNOUNCE.daysBefore);
   if (!s) return;
-  const talks = s.slots.filter(x => x.booking);
-  if (!testTo && !talks.length && SKIP_EMPTY_WEEKS) return;
+  if (!testTo && !s.slots.some(x => x.booking) && SKIP_EMPTY_WEEKS) return;
 
   const recipients = testTo ? [testTo] : activeSubscribers_();
   if (!recipients.length) return;
@@ -374,7 +398,20 @@ function announce_(testTo) {
   if (quota < recipients.length) {
     throw new Error(`Only ${quota} emails left in today's quota for ${recipients.length} subscribers.`);
   }
-  if (!testTo && !claimSend_('announce_' + s.date)) return;
+  if (!testTo) {
+    // Closes any gap (a row deleted by hand), then fixes the times: the claim is what timesFixed_ checks.
+    const lock = LockService.getScriptLock();
+    lock.waitLock(30000);
+    try {
+      closeUp_(s.date);
+      if (!claimSend_('announce_' + s.date)) return;
+      clearCache_();
+    } finally {
+      lock.releaseLock();
+    }
+    s = sessionData_(s.date);
+  }
+  const talks = s.slots.filter(x => x.booking);
 
   const heading = `${ANNOUNCE.daysBefore >= 5 ? 'Next week' : 'This week'} at the ${SEMINAR_NAME}`;
   const open = s.slots.length - talks.length;
@@ -618,8 +655,8 @@ function ics_(o) {
     // Later invites with the same UID (a moved or canceled talk) replace earlier ones in most calendars.
     'SEQUENCE:' + Math.floor(Date.now() / 1000),
     'DTSTAMP:' + stamp(new Date()),
-    'DTSTART:' + at(SLOT_TIMES[0]),
-    'DTEND:' + at(sessionEnd_()),
+    'DTSTART:' + at(SESSION.start),
+    'DTEND:' + at(SESSION.end),
     'SUMMARY:' + esc(o.summary),
     'LOCATION:' + esc(ROOM),
     'DESCRIPTION:' + esc(o.description),
@@ -711,14 +748,24 @@ function claimSend_(key) {
 function trySend_(fn) { try { fn(); } catch (err) { console.error(err); } }
 
 const addMin_ = (t, n) => { let [h, m] = t.split(':').map(Number); m += n; h += Math.floor(m / 60); m %= 60; return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`; };
-const sessionEnd_ = () => addMin_(SLOT_TIMES[SLOT_TIMES.length - 1], 15);
 const fmt12_ = t => { const [h, m] = t.split(':').map(Number); return `${h % 12 || 12}:${String(m).padStart(2, '0')}`; };
 const slotRange_ = t => `${fmt12_(t)}-${fmt12_(addMin_(t, 15))}`;
-const sessionRange_ = () => `${fmt12_(SLOT_TIMES[0])}-${fmt12_(sessionEnd_())}pm`;
+const sessionRange_ = () => `${fmt12_(SESSION.start).replace(':00', '')}-${fmt12_(SESSION.end).replace(':00', '')}pm`;
 const fmtLong_ = iso => Utilities.formatDate(new Date(iso + 'T12:00:00Z'), 'UTC', 'EEEE d MMMM');
 // "Wednesday 14 October, 10am"
 const fmtDeadline_ = ms => Utilities.formatDate(new Date(ms), TZ, 'EEEE d MMMM, h:mma').replace(':00', '').replace('AM', 'am').replace('PM', 'pm');
-const titleText_ = t => (String(t).trim().toUpperCase() === 'TBD' ? 'Title TBD' : t);
+const isTbd_ = t => String(t).trim().toUpperCase() === 'TBD';
+const titleText_ = t => (isTbd_(t) ? 'Title TBD' : t);
+// Until the line-up goes out, a presenter knows their date but not their time (timesFixed_ in Code.gs).
+const talkWhen_ = (date, time) => (timesFixed_(date) ? `${fmtLong_(date)}, ${slotRange_(time)}pm` : fmtLong_(date));
+const orderNote_ = date => `Talks run in the order they were booked, and the times are set when the line-up goes to the mailing list on ${fmtDeadline_(lineupAt_(date))}.`;
+// The presenter's invite covers the whole session, and names their slot once times are fixed.
+const talkInvite_ = (id, date, time, title) => ics_({
+  uid: `${id}-presenter@${host_()}`,
+  date: date,
+  summary: `${SEMINAR_NAME}: presenting${timesFixed_(date) ? ` at ${fmt12_(time)}pm` : ''}`,
+  description: `${timesFixed_(date) ? `Your slot: ${slotRange_(time)}pm\n` : ''}Title: ${titleText_(title)}\n\n${SITE_URL}`,
+});
 const linkHtml_ = b => `<a href="${h_(b.link)}" style="color:#003262">${h_(b.linkType)}</a>`;
 const firstName_ = n => String(n).trim().split(/\s+/)[0];
 const hash_ = s => Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, s)).slice(0, 10);

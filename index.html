@@ -69,7 +69,7 @@
   .is-next .day { box-shadow: inset 0 -.16em 0 var(--gold); }
   .past { opacity: .7; }
   .ticks { display: flex; justify-content: space-between; font-size: .75rem; color: var(--muted); margin-bottom: .35rem; font-variant-numeric: tabular-nums; }
-  .cells { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+  .cells { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px; }
   .cell { min-height: 7.5rem; padding: .7rem .8rem; border-radius: 4px; display: flex; flex-direction: column; gap: .2rem; text-align: left; font: inherit; font-size: .875rem; line-height: 1.35; }
   .cell .t { display: none; font-size: .75rem; font-variant-numeric: tabular-nums; }
   .booked { background: var(--booked); color: var(--booked-ink); }
@@ -131,7 +131,7 @@
     .date { flex-direction: row; align-items: baseline; gap: .4rem; }
     .day { font-size: 1.5rem; }
     .ticks { display: none; }
-    .cells { grid-template-columns: 1fr; }
+    .cells { grid-auto-flow: row; }
     .cell { min-height: 0; }
     .cell .t { display: block; }
     .open, .empty, .queued { flex-direction: row; justify-content: space-between; min-height: 46px; }
@@ -208,7 +208,7 @@
       <div class="sched-head">
         <div>
           <h2 class="title">Upcoming sessions</h2>
-          <p class="muted">Wednesdays, 3-4pm, Room C330, Cheit Hall, Haas. Slots fill in order.</p>
+          <p class="muted">Wednesdays, 3-4pm, Room C330, Cheit Hall, Haas. You book a week, not a time: talks run in the order they were booked, and times are fixed when the line-up goes out the Thursday before.</p>
         </div>
         <div class="tabs" role="tablist" aria-label="Sessions">
           <button role="tab" aria-selected="true" data-tab="upcoming">Upcoming</button>
@@ -493,7 +493,8 @@ function openDialog(date) {
   const slot = nextFree(s);
   if (!slot) return;
   current = s;
-  $('dlgWhen').textContent = `${longDate(s.date)}, ${range(slot.time)}pm`;
+  $('dlgWhen').textContent = s.timesFixed ? `${longDate(s.date)}, ${range(slot.time)}pm`
+    : `${longDate(s.date)}. Your time is set when the line-up goes out${s.lineupAt ? ` on ${fmtDeadline(s.lineupAt)}` : ''}.`;
   $('formError').hidden = true;
   const skip = canSkipAbstract(s);
   $('absOptional').hidden = needsAbstract(s);
@@ -603,7 +604,7 @@ $('form').addEventListener('submit', async e => {
     syncLink();
     syncAbstract();
     abstractFits();
-    toast(`Signed up for ${fmtDate(current.date, { weekday: 'short', day: 'numeric', month: 'short' })}, ${range(d.slot.time)}pm.`);
+    toast(`Signed up for ${fmtDate(current.date, { weekday: 'short', day: 'numeric', month: 'short' })}${d.timesFixed ? `, ${range(d.slot.time)}pm` : ''}.`);
   } catch (err) {
     showError('Your sign-up did not go through. Check your connection and try again.');
   } finally {
@@ -639,7 +640,9 @@ function demoSessions() {
   for (let i = 0; i < 9; i++) {
     const iso = ymd(d.getFullYear(), d.getMonth() + 1, d.getDate());
     // This week's session (i = 2) is the last one before abstracts are required.
-    out.push({ date: iso, abstractRequired: i > 2, abstractDeadline: demoDeadline(iso), slots: ['15:00', '15:15', '15:30', '15:45'].map(t => ({ id: `${iso}_${t.replace(':', '')}`, time: t, booking: null })) });
+    const lineupAt = demoDeadline(iso) + 864e5;
+    out.push({ date: iso, abstractRequired: i > 2, abstractDeadline: demoDeadline(iso), lineupAt, timesFixed: Date.now() >= lineupAt + 36e5,
+      slots: ['15:10', '15:25', '15:40'].map(t => ({ id: `${iso}_${t.replace(':', '')}`, time: t, booking: null })) });
     d.setDate(d.getDate() + 7);
   }
   const sample = [
@@ -660,7 +663,7 @@ function demoBook(p) {
   const slot = nextFree(sessions.find(s => s.date === p.date));
   if (!slot) return { ok: false, error: 'This session just filled up. Pick another week.' };
   slot.booking = { name: p.name, department: p.department, title: p.title, type: p.type, abstract: p.abstract, link: p.link, linkType: p.linkType };
-  return { ok: true, slot, sessions };
+  return { ok: true, slot, timesFixed: sessions.find(s => s.date === p.date).timesFixed, sessions };
 }
 
 load();

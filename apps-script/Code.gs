@@ -2,7 +2,8 @@
 const START_DATE = '2026-10-21';            // first Wednesday (YYYY-MM-DD)
 const END_DATE   = '2026-12-02';            // last Wednesday
 const SKIP_DATES = ['2026-11-11', '2026-11-25']; // weeks with no session (Veterans Day, Thanksgiving)
-const SLOT_TIMES = ['15:00', '15:15', '15:30', '15:45'];
+const SLOT_TIMES = ['15:10', '15:25', '15:40'];   // Berkeley time; after changing these, run fitBookingsToSlots
+const SESSION = { start: '15:00', end: '16:00' };  // calendar invites and emails; the spare time is for changeovers
 const ALLOWED_EMAIL_DOMAIN = '';            // e.g. 'berkeley.edu' to restrict sign-ups; '' allows any
 const MAX_UPCOMING_PER_EMAIL = 1;           // max future slots one person can hold; 0 = no limit
 const ABSTRACT_WORDS = 100;                 // abstract limit; math isn't counted
@@ -34,8 +35,8 @@ function cachedSessions_() {
 function clearCache_() { CacheService.getScriptCache().remove(CACHE_KEY); }
 function onEdit() { clearCache_(); }
 
-// People sign up for a session, not a time. The script gives them the earliest free slot,
-// so sessions fill in order and a slot freed by a cancellation is the next one taken.
+// People sign up for a session, not a time. Each new talk takes the earliest free slot, and until the line-up
+// email fixes the times, later talks move up when one is canceled or moved (see closeUp_).
 function doPost(e) {
   const lock = LockService.getScriptLock();
   try {
@@ -49,6 +50,7 @@ function doPost(e) {
     if (d.action === 'subscribe') return json_(subscribe_(d)); // mailing list, see Mailing.gs
     if (d.action === 'post') return json_(submitPost_(d));     // blog submissions, see Blog.gs
     if (d.action === 'abstract') return json_(saveAbstract_(d)); // the talk page, see below
+    if (d.action === 'title') return json_(saveTitle_(d));
     if (d.action === 'move') return json_(moveTalk_(d));
     if (d.action === 'cancel') return json_(cancelTalk_(d));
 
@@ -98,7 +100,7 @@ function doPost(e) {
     trySend_(() => { joinedList = addPresenterToList_(clean.email, clean.name); }); // see Mailing.gs
     trySend_(() => sendBookingConfirmation_(clean, time, joinedList));
     trySend_(() => sendAdminNotice_(clean, time));
-    return json_({ ok: true, slot: { id: id, time: time }, sessions: buildSessions_() });
+    return json_({ ok: true, slot: { id: id, time: time }, timesFixed: timesFixed_(clean.date), sessions: buildSessions_() });
   } finally {
     lock.releaseLock();
   }
@@ -136,6 +138,8 @@ function buildSessions_() {
     date: date,
     abstractRequired: abstractRequired_(date),
     abstractDeadline: abstractDeadline_(date),
+    timesFixed: timesFixed_(date),
+    lineupAt: lineupAt_(date),
     slots: SLOT_TIMES.map(t => {
       const id = slotId_(date, t);
       return { id: id, time: t, booking: booked[id] || null };
@@ -190,15 +194,41 @@ function getSheet_() {
   return sheet;
 }
 
-// ----- Your talk: the personal page (talk.html) where presenters add an abstract, move, or cancel -----
+// Moves the week's talks up into any gap, keeping their order. Returns how many didn't fit.
+function closeUp_(date) {
+  const sheet = getSheet_();
+  const talks = readBookings_(sheet).filter(r => r.slot_id.slice(0, 10) === date).sort((a, b) => (a.slot_id < b.slot_id ? -1 : 1));
+  talks.forEach((r, i) => {
+    const t = SLOT_TIMES[i];
+    if (t && slotId_(date, t) !== r.slot_id) sheet.getRange(r.row, 1, 1, 3).setValues([[slotId_(date, t), date, t]]);
+  });
+  return Math.max(0, talks.length - SLOT_TIMES.length);
+}
+
+// Run by hand after changing SLOT_TIMES: puts each week's bookings on the new times, in the same order.
+// Weeks already on the new times are left alone, so running it again changes nothing.
+function fitBookingsToSlots() {
+  const times = new Set(SLOT_TIMES);
+  const rows = readBookings_(getSheet_());
+  sessionDates_().forEach(date => {
+    if (rows.every(r => r.slot_id.slice(0, 10) !== date || times.has(timeOf_(r.slot_id)))) return;
+    const extra = closeUp_(date);
+    Logger.log(extra ? `${date}: ${extra} more talk(s) than slots, left on their old times. Move them by hand.` : `${date}: moved to the new times.`);
+  });
+  clearCache_();
+}
+
+// ----- Your talk: the personal page (talk.html) where presenters add a title or abstract, move, or cancel -----
 
 const abstractRequired_ = date => date >= ABSTRACTS_FROM;
+const atHour_ = (day, hour) => Utilities.parseDate(day + ' ' + String(hour).padStart(2, '0') + ':00', TZ, 'yyyy-MM-dd HH:mm').getTime();
 
-// Due 24 hours before the weekly announcement (ANNOUNCE in Mailing.gs), as a timestamp in ms.
-function abstractDeadline_(date) {
-  const day = shiftDate_(date, -(ANNOUNCE.daysBefore + 1));
-  return Utilities.parseDate(day + ' ' + String(ANNOUNCE.hour).padStart(2, '0') + ':00', TZ, 'yyyy-MM-dd HH:mm').getTime();
-}
+// Abstracts, and titles still TBD, are due 24 hours before the weekly announcement (ANNOUNCE in Mailing.gs), in ms.
+const abstractDeadline_ = date => atHour_(shiftDate_(date, -(ANNOUNCE.daysBefore + 1)), ANNOUNCE.hour);
+const lineupAt_ = date => atHour_(shiftDate_(date, -ANNOUNCE.daysBefore), ANNOUNCE.hour);
+// Times are fixed once the line-up has gone to the mailing list. The trigger runs within the hour after
+// ANNOUNCE.hour, and a week nobody booked sends nothing, so after that hour the clock decides.
+const timesFixed_ = date => !!PropertiesService.getScriptProperties().getProperty('announce_' + date) || Date.now() >= lineupAt_(date) + 36e5;
 
 const LINK_ERROR = 'This link is not valid. Use the link in your confirmation email, or email the organizers.';
 const newBookingId_ = () => Utilities.getUuid().replace(/-/g, '').slice(0, 12);
@@ -231,13 +261,13 @@ function talkInfo_(p) {
   // Every other upcoming week with an open slot, and the slot a move there would get.
   const moves = date < today ? [] : buildSessions_()
     .filter(s => s.date >= today && s.date !== date)
-    .map(s => ({ date: s.date, slot: s.slots.find(x => !x.booking) }))
+    .map(s => ({ date: s.date, slot: s.slots.find(x => !x.booking), timesFixed: s.timesFixed }))
     .filter(s => s.slot)
-    .map(s => ({ date: s.date, time: s.slot.time }));
+    .map(s => ({ date: s.date, time: s.slot.time, timesFixed: s.timesFixed }));
   return {
-    ok: true, date: date, time: timeOf_(b.slot_id), title: titleText_(b.title), name: b.name,
+    ok: true, date: date, time: timeOf_(b.slot_id), title: titleText_(b.title), tbd: isTbd_(b.title), name: b.name,
     abstract: b.abstract, abstractRequired: abstractRequired_(date), deadline: abstractDeadline_(date),
-    past: date < today, moves: moves,
+    timesFixed: timesFixed_(date), lineupAt: lineupAt_(date), past: date < today, moves: moves,
   };
 }
 
@@ -252,6 +282,18 @@ function saveAbstract_(d) {
   getSheet_().getRange(b.row, HEADERS.indexOf('abstract') + 1, 1, 2).setValues([[safe_(abstract), new Date()]]);
   clearCache_();
   trySend_(() => sendAbstractNotice_(b, abstract)); // see Mailing.gs
+  return { ok: true };
+}
+
+function saveTitle_(d) {
+  const b = bookingForLink_(d);
+  if (!b) return { ok: false, error: LINK_ERROR };
+  if (b.slot_id.slice(0, 10) < today_()) return { ok: false, error: 'This talk has already happened.' };
+  const title = str_(d.title, 200);
+  if (!title || isTbd_(title)) return { ok: false, error: 'Add your title.' };
+  getSheet_().getRange(b.row, HEADERS.indexOf('title') + 1).setValue(safe_(title));
+  clearCache_();
+  trySend_(() => sendTitleNotice_(b, title)); // see Mailing.gs
   return { ok: true };
 }
 
@@ -272,17 +314,20 @@ function moveTalk_(d) {
   const time = SLOT_TIMES.find(t => !taken.has(slotId_(to, t)));
   if (!time) return { ok: false, error: 'That week just filled up. Choose another.' };
   sheet.getRange(b.row, 1, 1, 3).setValues([[slotId_(to, time), to, time]]);
+  if (!timesFixed_(from)) closeUp_(from);
   clearCache_();
   trySend_(() => sendMoveNotice_(Object.assign({}, b, { slot_id: slotId_(to, time) }), b.slot_id)); // see Mailing.gs
-  return { ok: true, date: to, time: time };
+  return { ok: true, date: to, time: time, timesFixed: timesFixed_(to) };
 }
 
 // Deletes the booking's row, as canceling by hand does; the emails keep the details.
 function cancelTalk_(d) {
   const b = bookingForLink_(d);
   if (!b) return { ok: false, error: LINK_ERROR };
-  if (b.slot_id.slice(0, 10) < today_()) return { ok: false, error: 'This talk has already happened.' };
+  const date = b.slot_id.slice(0, 10);
+  if (date < today_()) return { ok: false, error: 'This talk has already happened.' };
   getSheet_().deleteRow(b.row);
+  if (!timesFixed_(date)) closeUp_(date);
   clearCache_();
   trySend_(() => sendCancelNotice_(b)); // see Mailing.gs
   return { ok: true };

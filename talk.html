@@ -22,6 +22,7 @@
   .panel:last-child { margin-bottom: 4rem; }
   .panel h2 { font: 600 1.5rem/1.2 var(--serif); color: var(--title); margin: 0 0 .5rem; }
   .panel > p { margin: 0 0 1rem; }
+  .talk-card .order { margin-top: .6rem; color: var(--muted); font-size: .9rem; }
   .abs-form { display: grid; gap: .9rem; }
   .abs-form .actions, .confirm .actions { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem 1rem; }
   .saved, .moved { margin: 0; }
@@ -65,7 +66,7 @@
     <div class="page-head-inner">
       <div>
         <h1>Your talk</h1>
-        <p class="lede">Add or change your abstract, or move or cancel your slot.</p>
+        <p class="lede">Add or change your title and abstract, or move or cancel your talk.</p>
       </div>
     </div>
   </div>
@@ -78,7 +79,21 @@
         <p class="when" id="when"></p>
         <p class="ttl" id="ttl"></p>
         <p class="muted" id="who"></p>
+        <p class="order" id="order" hidden></p>
       </div>
+
+      <section class="panel" id="title" aria-labelledby="title-h">
+        <h2 id="title-h">Title</h2>
+        <p class="muted" id="titleDue"></p>
+        <form class="abs-form" id="titleForm" novalidate>
+          <input id="titleText" maxlength="200" placeholder="Rough is fine" aria-labelledby="title-h" autocomplete="off">
+          <p class="error" id="titleError" role="alert" hidden></p>
+          <div class="actions">
+            <button class="btn btn-primary" type="submit" id="titleBtn">Save title</button>
+            <p class="saved" id="titleSaved" role="status" hidden></p>
+          </div>
+        </form>
+      </section>
 
       <section class="panel" id="abstract" aria-labelledby="abs-h">
         <h2 id="abs-h">Abstract</h2>
@@ -103,8 +118,8 @@
         <div class="confirm" id="moveConfirm" hidden>
           <p id="moveText"></p>
           <div class="actions">
-            <button class="btn btn-primary" type="button" id="moveYes">Move my talk</button>
-            <button class="btn btn-secondary" type="button" id="moveNo">Keep my slot</button>
+            <button class="btn btn-primary" type="button" id="moveYes">Move booking</button>
+            <button class="btn btn-secondary" type="button" id="moveNo">Keep booking</button>
           </div>
         </div>
         <p class="error" id="changeError" role="alert" hidden></p>
@@ -164,7 +179,9 @@ const fits = wordCounter($('abstractText'), $('absCount'), ABSTRACT_WORDS);
 const fmtTime = t => { const [h, m] = t.split(':').map(Number); return `${h % 12 || 12}:${String(m).padStart(2, '0')}`; };
 const endTime = t => { const [h, m] = t.split(':').map(Number); const e = h * 60 + m + 15; return `${Math.floor(e / 60)}:${String(e % 60).padStart(2, '0')}`; };
 const longDate = iso => { const [y, m, d] = iso.split('-').map(Number); return new Date(y, m - 1, d, 12).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }); };
-const slotText = (date, time) => `${longDate(date)}, ${fmtTime(time)}-${fmtTime(endTime(time))}pm`;
+// Until the line-up goes out, a talk has a date but not yet a time.
+const slotText = (date, time, fixed) => (fixed ? `${longDate(date)}, ${fmtTime(time)}-${fmtTime(endTime(time))}pm` : longDate(date));
+const titleSaved = 'Your title is saved. You can change it below.';
 
 function fail(msg) { $('status').textContent = msg; $('status').hidden = false; $('talkArea').hidden = true; }
 const say = (el, msg) => { $(el).textContent = msg; $(el).hidden = !msg; };
@@ -172,15 +189,23 @@ const say = (el, msg) => { $(el).textContent = msg; $(el).hidden = !msg; };
 function show() {
   $('status').hidden = true;
   $('talkArea').hidden = false;
-  $('when').textContent = slotText(talk.date, talk.time);
+  $('when').textContent = slotText(talk.date, talk.time, talk.timesFixed);
   $('ttl').textContent = talk.title;
   $('who').textContent = talk.name;
-  $('cancelWhen').textContent = slotText(talk.date, talk.time);
+  $('order').hidden = talk.past || talk.timesFixed || !talk.lineupAt;
+  if (!$('order').hidden) $('order').textContent = `Talks run in the order they were booked. Your time is set when the line-up goes to the mailing list on ${fmtDeadline(talk.lineupAt)}.`;
+  $('cancelWhen').textContent = slotText(talk.date, talk.time, talk.timesFixed);
   if (talk.past) {
     $('due').textContent = 'This talk has already happened.';
-    $('absForm').hidden = $('change').hidden = true;
+    $('title').hidden = $('absForm').hidden = $('change').hidden = true;
     return;
   }
+  $('titleDue').textContent = !talk.tbd
+    ? titleSaved
+    : Date.now() < talk.deadline
+      ? `Due by ${fmtDeadline(talk.deadline)}. It goes in the weekly email and on the schedule.`
+      : 'The deadline has passed, so please add it as soon as you can.';
+  $('titleText').value = talk.tbd ? '' : talk.title;
   $('due').textContent = talk.abstract
     ? 'Your abstract is saved. You can edit it below.'
     : !talk.abstractRequired
@@ -191,14 +216,18 @@ function show() {
   $('abstractText').value = talk.abstract || '';
   fits();
   $('movesIntro').textContent = talk.moves.length
-    ? "Move to another week instead. You'll get the first open slot that week."
+    ? "Move to another week instead. You'll go after the talks already booked that week."
     : 'No other week has an open slot right now. Check back later, or email berkeleyfirstyearworkshop@gmail.com.';
   $('moves').innerHTML = talk.moves.map((m, i) =>
-    `<li><button type="button" class="btn btn-secondary" data-move="${i}"><span>${esc(longDate(m.date))}, <span style="white-space:nowrap">${fmtTime(m.time)}-${fmtTime(endTime(m.time))}pm</span></span><span class="go">Move here</span></button></li>`).join('');
+    `<li><button type="button" class="btn btn-secondary" data-move="${i}"><span>${esc(longDate(m.date))}${m.timesFixed ? `, <span style="white-space:nowrap">${fmtTime(m.time)}-${fmtTime(endTime(m.time))}pm</span>` : ''}</span><span class="go">Move here</span></button></li>`).join('');
   $('moveConfirm').hidden = true;
   if (location.hash === '#abstract' && !talk.abstract) {
     $('abstract').scrollIntoView();
     $('abstractText').focus({ preventScroll: true });
+  }
+  if (location.hash === '#title' && talk.tbd) {
+    $('title').scrollIntoView();
+    $('titleText').focus({ preventScroll: true });
   }
 }
 
@@ -245,13 +274,34 @@ $('absForm').addEventListener('submit', async e => {
   }
 });
 
+$('titleForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  say('titleError', ''); say('titleSaved', '');
+  const title = $('titleText').value.trim();
+  if (!title || title.toUpperCase() === 'TBD') return say('titleError', 'Add your title.');
+  const btn = $('titleBtn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const d = await send('title', { title });
+    if (!d.ok) return say('titleError', d.error);
+    Object.assign(talk, { title, tbd: false });
+    $('ttl').textContent = title;
+    $('titleDue').textContent = titleSaved;
+    say('titleSaved', 'Saved. Thanks!');
+  } catch (err) {
+    say('titleError', 'Saving did not work. Check your connection and try again.');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save title';
+  }
+});
+
 $('moves').addEventListener('click', e => {
   const btn = e.target.closest('button[data-move]');
   if (!btn) return;
   pick = talk.moves[Number(btn.dataset.move)];
   say('changeError', ''); say('moved', '');
   $('cancelConfirm').hidden = true;
-  $('moveText').textContent = `Move your talk from ${slotText(talk.date, talk.time)} to ${slotText(pick.date, pick.time)}?`;
+  $('moveText').textContent = `Move your talk from ${slotText(talk.date, talk.time, talk.timesFixed)} to ${slotText(pick.date, pick.time, pick.timesFixed)}?`;
   $('moveConfirm').hidden = false;
 });
 $('moveNo').addEventListener('click', () => { $('moveConfirm').hidden = true; });
@@ -261,15 +311,15 @@ $('moveYes').addEventListener('click', async () => {
   try {
     const d = await send('move', { date: pick.date });
     if (!d.ok) { $('moveConfirm').hidden = true; return say('changeError', d.error); }
-    const moved = slotText(d.date || pick.date, d.time || pick.time);
-    if (DEMO) { talk.moves = talk.moves.filter(m => m !== pick).concat({ date: talk.date, time: talk.time }); Object.assign(talk, pick); }
+    const moved = slotText(d.date || pick.date, d.time || pick.time, DEMO ? pick.timesFixed : d.timesFixed);
+    if (DEMO) { talk.moves = talk.moves.filter(m => m !== pick).concat({ date: talk.date, time: talk.time, timesFixed: talk.timesFixed }); Object.assign(talk, pick); }
     else await load();
     show();
     say('moved', `Moved. You're now presenting on ${moved}. A new calendar invite is on its way.`);
   } catch (err) {
     say('changeError', 'Moving did not work. Check your connection and try again.');
   } finally {
-    btn.disabled = false; btn.textContent = 'Move my talk';
+    btn.disabled = false; btn.textContent = 'Move booking';
   }
 });
 
@@ -297,9 +347,9 @@ $('cancelYes').addEventListener('click', async () => {
 // ----- Preview data (used when API_URL is empty or the address has ?demo) -----
 function demoTalk() {
   return {
-    date: '2026-11-04', time: '15:30', title: 'Do stablecoin runs look like bank runs?', name: 'Lucía G.', abstract: '',
-    abstractRequired: true, deadline: Date.parse('2026-10-28T10:00:00-07:00'), past: false,
-    moves: [{ date: '2026-10-28', time: '15:15' }, { date: '2026-11-18', time: '15:00' }, { date: '2026-12-02', time: '15:00' }],
+    date: '2026-11-04', time: '15:40', title: 'Title TBD', tbd: true, name: 'Lucía G.', abstract: '',
+    abstractRequired: true, deadline: Date.parse('2026-10-28T10:00:00-07:00'), timesFixed: false, lineupAt: Date.parse('2026-10-29T10:00:00-07:00'), past: false,
+    moves: [{ date: '2026-10-28', time: '15:40', timesFixed: true }, { date: '2026-11-18', time: '15:25', timesFixed: false }, { date: '2026-12-02', time: '15:10', timesFixed: false }],
   };
 }
 

@@ -3,3 +3,4 @@ submissions/
 __pycache__/
 # Local to-do list
 TODO.md
+offline_files/

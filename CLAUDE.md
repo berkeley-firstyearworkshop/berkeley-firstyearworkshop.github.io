@@ -10,7 +10,7 @@ The website for the Berkeley first-year PhD presentation series (Econ, ARE, and 
 |---|---|
 | `index.html` | Home: next session, mailing-list strip, schedule (first 3 weeks + "Show N more"), sign-up dialog with abstract, and latest posts |
 | `about.html` | How it works + FAQ |
-| `talk.html` | "Your talk": the personal-link page where a presenter adds or edits their abstract, moves to another week (the preferred option), or cancels |
+| `talk.html` | "Your talk": the personal-link page where a presenter adds or edits their title and abstract, moves to another week (the preferred option), or cancels |
 | `blog/index.html` | Blog index: a front page for the latest 10 posts (lead, two with pictures, a list of four, a row of three), then square tiles |
 | `blog/submit.html` | Guidelines + submission form with live word counter and in-browser image resizing |
 | `blog/_template.html` | Post template (not published: Jekyll skips `_` files) |
@@ -80,17 +80,19 @@ Use the `/blog-post` skill. In short: `blog.py check` → review (word count, im
 
 The files in `apps-script/` are copies. What runs is the Apps Script project bound to the bookings Google Sheet. After editing a copy, paste it into that project and save. Changes to `Code.gs` or `Blog.gs` also need **Deploy > Manage deployments > Edit > New version**. Rerun `setupTriggers` after changing any trigger setting.
 
-- `Code.gs`: bookings; the abstract field and its deadline; the talk page's endpoints (look up, save abstract, move, cancel), each checked against a signed link built from the booking's `booking_id` (never the email), so links survive a move; request routing. Config: term dates, `ABSTRACT_WORDS`, `ABSTRACTS_FROM` (abstracts are optional for sessions before this date: no deadline, no reminder).
-- `Mailing.gs`: every email and trigger. Config: `REMINDER`, `ANNOUNCE`, `ABSTRACT_REMINDER` (derived from `ANNOUNCE`), `BLOG_DIGEST`, `ADMIN_EMAIL`. Run `remindNextSessionAbstracts` by hand to chase the next session's missing abstracts when the automatic reminder has already passed (after the deadline, it asks for them before the announcement instead).
+- `Code.gs`: bookings; the abstract field and its deadline; the talk page's endpoints (look up, save title, save abstract, move, cancel), each checked against a signed link built from the booking's `booking_id` (never the email), so links survive a move; request routing. Config: term dates, `SESSION` (3-4pm: calendar invites and emails), `SLOT_TIMES` (three 15-minute talks from 3:10, Berkeley time, leaving time for changeovers; after changing them, run `fitBookingsToSlots` to move existing bookings onto the new times in the same order), `ABSTRACT_WORDS`, `ABSTRACTS_FROM` (abstracts are optional for sessions before this date: no deadline, no reminder).
+- **Talk order:** people book a week, not a time. Talks run in booking order; until the line-up email goes out, a cancel or move closes the gap (`closeUp_`) and emails give only the date. The line-up email closes any remaining gap (a row deleted by hand) and then fixes the times (`timesFixed_`): after it, a cancel leaves the slot open and the next sign-up takes it.
+- `Mailing.gs`: every email and trigger. Config: `REMINDER`, `ANNOUNCE`, `ABSTRACT_REMINDER` and `FINAL_REMINDER` (both derived from `ANNOUNCE`), `BLOG_DIGEST`, `ADMIN_EMAIL`. Run `remindNextSessionAbstracts` by hand to chase the next session's missing abstracts when the automatic reminder has already passed (after the deadline, it asks for them before the announcement instead).
 - `Blog.gs`: blog submissions (an image is required). Each one emails the organizers the submission and the author a thank-you with a copy of what they sent (`sendBlogThanks_` in `Mailing.gs`). `BLOG_SHEET_ID` is set in the live project only; keep it `''` in the repo copy.
 
-Abstract timing for a Wednesday 3pm talk:
+Abstract and title timing for a Wednesday session:
 
 | When | Days before | What |
 |---|---|---|
-| Monday 9am | 9 | Reminder to presenters without an abstract, cc `ADMIN_EMAIL` |
-| Wednesday 10am | 7 | Abstract deadline (24h before the announcement); "Skip for now" disappears after this |
-| Thursday 10am | 6 | Weekly announcement to the mailing list, abstracts included |
+| Monday 9am | 9 | Reminder to presenters without an abstract or with a TBD title, cc `ADMIN_EMAIL` |
+| Wednesday 10am | 7 | Abstract and title deadline (24h before the announcement); "Skip for now" disappears after this |
+| Thursday 7:30am | 6 | "Final reminder: add your title/abstract" to presenters still missing either, cc `ADMIN_EMAIL` |
+| Thursday 10am | 6 | Weekly announcement to the mailing list, abstracts included. Times are fixed from here |
 | Sunday 7pm | weekly | "New on the blog" email, skipped when there are no new posts. Every post gets the same-size card, in a random order for each subscriber, so none is featured |
 
 Apps Script can't run locally. The `.gs` files are plain JavaScript, so their syntax and pure helpers (`countWords_`, `newPosts_`, date math with a stubbed `Utilities`) can be checked by loading them in headless Chrome. `testEmails` (run in the Apps Script editor) sends one of every email to the account running it.

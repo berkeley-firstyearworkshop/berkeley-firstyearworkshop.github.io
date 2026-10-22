@@ -65,10 +65,11 @@ After changing `_partials/` or `blog/posts.json`, run `python3 blog/blog.py buil
 
 ## Managing bookings
 
-- **Presenters can move or cancel themselves** from the link in their confirmation and reminder emails ("Your talk" page). You get an email each time.
-- **Cancel by hand:** delete the row in the `Bookings` tab. The freed slot becomes the next one offered for that week.
+- **Presenters can add their title or abstract, move, or cancel themselves** from the link in their confirmation and reminder emails ("Your talk" page). You get an email each time.
+- **Cancel by hand:** delete the row in the `Bookings` tab. Before the line-up email, the talks after it move up when that email goes out; after it, the slot stays open and the next sign-up takes it.
 - **Move someone by hand:** change their `slot_id` (format `YYYY-MM-DD_HHMM`, e.g. `2026-10-14_1530`). Only `slot_id` is used for matching; the date and time columns are just for reading. Leave `booking_id` alone: their personal link depends on it.
 - **Abstracts** are in the `abstract` column. You can edit them there; editing the Sheet clears the cached schedule, so the site shows the change straight away.
 - **Emails** stay in the sheet and are never sent to the page.
-- People sign up for a week, not a time: they get the earliest free slot, so sessions fill in order.
+- People sign up for a week, not a time. Talks run in booking order, and until the Thursday line-up email a cancel or move on the talk page moves the later talks up. The line-up email fixes the times; emails before it give only the date.
+- **Changing the slot times:** edit `SLOT_TIMES` in `Code.gs`, then run `fitBookingsToSlots` once. It moves every week's bookings onto the new times, keeping their order, and logs any week with more talks than slots.
 - Each person can hold one upcoming slot at a time (`MAX_UPCOMING_PER_EMAIL`).
